@@ -81,6 +81,13 @@ with tab2:
         st.warning("Belum ada barang di stok.")
     else:
         df = pd.DataFrame(st.session_state.barang)
+
+        kategori_unik = df["kategori"].unique().tolist()
+        kategori_pilih = st.selectbox("Filter Kategori:", ["Semua"] + kategori_unik)
+
+        if kategori_pilih != "Semua":
+            df = df[df["kategori"] == kategori_pilih]
+
         daftar_nama = df["nama"].tolist()
         barang_dipilih = st.multiselect("Pilih Barang:", daftar_nama)
 
@@ -123,6 +130,10 @@ with tab2:
                                 "total": subtotal_dict[nama],
                                 "keuntungan": (barang["harga_jual"] - barang["harga_modal"]) * jumlah
                             })
+
+                    # Reset qty input
+                    for nama in barang_dipilih:
+                        st.session_state.pop(f"qty_{nama}", None)
 
                     # Tampilkan struk
                     st.success("Transaksi berhasil!")
