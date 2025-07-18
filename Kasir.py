@@ -20,21 +20,21 @@ def backup_file(file):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"{file}_backup_{timestamp}"
         shutil.copy(file, backup_name)
-        notify_warn(f"⚠️ File {file} corrupt! Dibackup ke {backup_name}")
+        st.warning(f"⚠️ File {file} corrupt! Dibackup ke {backup_name}")
 
 def load_data(file, default=[]):
     """Load JSON, reset ke default jika kosong/corrupt"""
     if not os.path.exists(file):
         with open(file, "w", encoding="utf-8") as f:
-            json.dump(default, f, ensure_ascii=False)
+            json.dump(default, f, indent=2, ensure_ascii=False)
         return default
     try:
         with open(file, "r", encoding="utf-8") as f:
             return json.load(f)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError:
         backup_file(file)
         with open(file, "w", encoding="utf-8") as f:
-            json.dump(default, f, ensure_ascii=False)
+            json.dump(default, f, indent=2, ensure_ascii=False)
         return default
 
 def simpan_data(file, data):
@@ -42,13 +42,11 @@ def simpan_data(file, data):
     with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-def notify_info(msg): st.info(msg.encode("utf-8").decode("utf-8"))
-def notify_success(msg): st.success(msg.encode("utf-8").decode("utf-8"))
-def notify_warn(msg): st.warning(msg.encode("utf-8").decode("utf-8"))
-def notify_error(msg): st.error(msg.encode("utf-8").decode("utf-8"))
+def load_akun():
+    return load_data(AKUN_FILE)
 
-def load_akun(): return load_data(AKUN_FILE)
-def simpan_akun(data): simpan_data(AKUN_FILE, data)
+def simpan_akun(data):
+    simpan_data(AKUN_FILE, data)
 
 def tampilkan_login():
     st.title("🔒 Login Kasir")
@@ -67,7 +65,7 @@ def tampilkan_login():
                 st.session_state.role = role
                 st.rerun()
             else:
-                notify_error("Login gagal. Periksa username/password/role.")
+                st.error("Login gagal. Periksa username/password/role.")
 
     with tab2:
         new_user = st.text_input("Username Baru")
@@ -76,11 +74,11 @@ def tampilkan_login():
         if st.button("Daftar"):
             data = load_akun()
             if any(u["username"] == new_user for u in data):
-                notify_warn("Username sudah ada.")
+                st.warning("⚠️ Username sudah ada.")
             else:
                 data.append({"username": new_user, "password": new_pass, "role": new_role})
                 simpan_akun(data)
-                notify_success("Akun berhasil dibuat!")
+                st.success("✅ Akun berhasil dibuat!")
 
 if "login" not in st.session_state:
     st.session_state.login = False
@@ -105,7 +103,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(menu)
 with tab1:
     st.header("📦 Input Barang")
     if st.session_state.role != "admin":
-        notify_warn("Hanya admin yang bisa menambahkan barang.")
+        st.warning("Hanya admin yang bisa menambahkan barang.")
     else:
         with st.form("form_barang"):
             nama = st.text_input("Nama Barang")
@@ -124,7 +122,7 @@ with tab1:
                     "terjual": 0
                 })
                 simpan_data(BARANG_FILE, st.session_state.barang)
-                notify_success(f"Barang '{nama}' disimpan.")
+                st.success(f"✅ Barang '{nama}' disimpan.")
 
         if st.session_state.barang:
             st.dataframe(pd.DataFrame(st.session_state.barang))
@@ -134,7 +132,7 @@ with tab2:
     st.header("🛒 Transaksi Kasir")
 
     if not st.session_state.barang:
-        notify_warn("Belum ada barang di stok.")
+        st.warning("Belum ada barang di stok.")
     else:
         df_barang = pd.DataFrame(st.session_state.barang)
 
@@ -157,7 +155,7 @@ with tab2:
                     "harga_satuan": barang_data["harga_jual"],
                     "subtotal": jumlah_beli * barang_data["harga_jual"]
                 })
-                notify_success(f"{jumlah_beli} {barang_pilih} ditambahkan ke keranjang.")
+                st.success(f"✅ {jumlah_beli} {barang_pilih} ditambahkan ke keranjang.")
 
         if st.session_state.keranjang:
             st.subheader("📝 Keranjang Belanja")
@@ -179,7 +177,7 @@ with tab2:
 
             if st.button("✅ Proses Transaksi"):
                 if uang_bayar < total_bayar:
-                    notify_error("Uang tidak cukup.")
+                    st.error("Uang tidak cukup.")
                 else:
                     kembalian = uang_bayar - total_bayar
                     waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -217,78 +215,7 @@ with tab2:
                     struk.write(f"Kembalian: Rp {kembalian:,}\n")
                     struk.write("="*32 + "\nTerima kasih atas kunjungan Anda\n")
 
-                    notify_success("✅ Transaksi berhasil.")
+                    st.success("✅ Transaksi berhasil.")
                     st.text(struk.getvalue())
                     st.download_button("🖨️ Download Struk", data=struk.getvalue(), file_name="struk_toko_wawan.txt")
                     st.session_state.keranjang.clear()
-# 🧾 Riwayat Transaksi
-with tab4:
-    st.header("🧾 Riwayat Transaksi")
-    df_transaksi = pd.DataFrame(st.session_state.transaksi)
-    if df_transaksi.empty:
-        notify_info("Belum ada transaksi.")
-    else:
-        df_transaksi["waktu"] = pd.to_datetime(df_transaksi["waktu"])
-        tanggal_mulai = st.date_input("Dari Tanggal", df_transaksi["waktu"].min().date())
-        tanggal_akhir = st.date_input("Sampai Tanggal", df_transaksi["waktu"].max().date())
-        mask = (df_transaksi["waktu"].dt.date >= tanggal_mulai) & (df_transaksi["waktu"].dt.date <= tanggal_akhir)
-        df_filtered = df_transaksi[mask]
-
-        if st.session_state.role == "kasir":
-            df_filtered = df_filtered[df_filtered["user"] == st.session_state.user]
-
-        st.dataframe(df_filtered)
-
-        # Ringkasan Total
-        total_transaksi = df_filtered["total"].sum()
-        total_keuntungan = df_filtered["keuntungan"].sum()
-        notify_success(f"✅ Total Transaksi: Rp {total_transaksi:,} | Keuntungan: Rp {total_keuntungan:,}")
-
-# 📊 Dashboard
-with tab5:
-    st.header("📊 Dashboard")
-    df_dashboard = pd.DataFrame(st.session_state.transaksi)
-    if df_dashboard.empty:
-        notify_info("Belum ada transaksi.")
-    else:
-        tab_chart, tab_table = st.tabs(["📈 Grafik", "📋 Tabel"])
-        with tab_chart:
-            fig1 = px.bar(
-                df_dashboard.groupby("nama")["jumlah"].sum().reset_index(),
-                x="nama", y="jumlah", title="📊 Penjualan per Barang"
-            )
-            fig2 = px.pie(
-                df_dashboard, names="nama", values="keuntungan",
-                title="📊 Kontribusi Keuntungan per Barang"
-            )
-            st.plotly_chart(fig1, use_container_width=True)
-            st.plotly_chart(fig2, use_container_width=True)
-        with tab_table:
-            df_summary = df_dashboard.groupby("nama")[["jumlah", "keuntungan"]].sum().reset_index()
-            st.dataframe(df_summary)
-
-# 📤 Ekspor Data
-with tab6:
-    st.header("📤 Ekspor Data")
-    col_barang, col_transaksi = st.columns(2)
-
-    with col_barang:
-        if st.session_state.barang:
-            df_barang = pd.DataFrame(st.session_state.barang)
-            csv_barang = df_barang.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="⬇️ Unduh Data Barang",
-                data=csv_barang,
-                file_name="data_barang.csv",
-                mime="text/csv"
-            )
-    with col_transaksi:
-        if st.session_state.transaksi:
-            df_transaksi_all = pd.DataFrame(st.session_state.transaksi)
-            csv_transaksi = df_transaksi_all.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="⬇️ Unduh Data Transaksi",
-                data=csv_transaksi,
-                file_name="data_transaksi.csv",
-                mime="text/csv"
-            )
