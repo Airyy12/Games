@@ -1,5 +1,3 @@
-# Aplikasi Kasir Streamlit Lengkap
-
 import streamlit as st
 import pandas as pd
 import json
@@ -9,7 +7,6 @@ import plotly.express as px
 
 st.set_page_config(page_title="Aplikasi Kasir", layout="wide")
 
-# File akun disimpan permanen
 AKUN_FILE = "akun.json"
 
 def load_akun():
@@ -55,14 +52,12 @@ def tampilkan_login():
                 simpan_akun(data)
                 st.success("Akun berhasil dibuat!")
 
-# Login
 if "login" not in st.session_state:
     st.session_state.login = False
 if not st.session_state.login:
     tampilkan_login()
     st.stop()
 
-# Setup awal
 if "barang" not in st.session_state:
     st.session_state.barang = []
 if "transaksi" not in st.session_state:
@@ -74,14 +69,10 @@ if st.sidebar.button("🔒 Logout"):
     st.session_state.clear()
     st.rerun()
 
-# Tab utama
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "📦 Input Barang", "🛒 Kasir", "📋 Status Stok Barang", "🧾 Riwayat", "📈 Dashboard", "📤 Ekspor"
-])
+# Tabs
+menu = ["📦 Input Barang", "🛒 Kasir", "📋 Stok", "🧾 Riwayat", "📈 Dashboard", "📤 Ekspor"]
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(menu)
 
-# ======================
-# TAB 1: Input Barang (admin)
-# ======================
 with tab1:
     st.header("📦 Input Barang")
     if st.session_state.role != "admin":
@@ -106,12 +97,8 @@ with tab1:
                 st.success(f"Barang '{nama}' disimpan.")
 
         if st.session_state.barang:
-            st.subheader("📋 Daftar Barang")
             st.dataframe(pd.DataFrame(st.session_state.barang))
 
-# ======================
-# TAB 2: Transaksi Kasir
-# ======================
 with tab2:
     st.header("🛒 Transaksi Kasir")
     if not st.session_state.barang:
@@ -137,7 +124,16 @@ with tab2:
             harga_jual = b["harga_jual"]
 
             if stok <= 0:
-                continue  # skip jika stok habis
+                continue
+
+            if f"qty_{nama}" not in st.session_state:
+                st.session_state[f"qty_{nama}"] = 0
+            if f"hapus_{nama}" not in st.session_state:
+                st.session_state[f"hapus_{nama}"] = False
+
+            if st.session_state[f"hapus_{nama}"]:
+                st.session_state[f"qty_{nama}"] = 0
+                st.session_state[f"hapus_{nama}"] = False
 
             col1, col2, col3 = st.columns([4, 2, 1])
             with col1:
@@ -148,19 +144,16 @@ with tab2:
                     step=1, key=f"qty_{nama}"
                 )
             with col3:
-                if st.button("🗑️ Hapus", key=f"hapus_{nama}"):
-                    st.session_state[f"qty_{nama}"] = 0
+                if st.button("🗑️ Hapus", key=f"hapusbtn_{nama}"):
+                    st.session_state[f"hapus_{nama}"] = True
 
-            if qty > 0:
-                qty_dict[nama] = qty
-                subtotal = qty * harga_jual
+            if st.session_state[f"qty_{nama}"] > 0:
+                qty_dict[nama] = st.session_state[f"qty_{nama}"]
+                subtotal = st.session_state[f"qty_{nama}"] * harga_jual
                 subtotal_dict[nama] = subtotal
                 total += subtotal
-                barang_dibeli.append((nama, qty, subtotal))
+                barang_dibeli.append((nama, st.session_state[f"qty_{nama}"], subtotal))
 
-        # ========================
-        # RINGKASAN
-        # ========================
         if barang_dibeli:
             st.markdown("---")
             st.markdown("## 🧾 Ringkasan")
@@ -188,24 +181,8 @@ with tab2:
                             "total": subtotal,
                             "keuntungan": (barang["harga_jual"] - barang["harga_modal"]) * qty
                         })
-
-                    # Reset qty input
-                    for nama in qty_dict.keys():
-                        st.session_state[f"qty_{nama}"] = 0
-
                     st.success("✅ Transaksi berhasil!")
-                    st.code(f"""
-Waktu: {waktu}
-Total: Rp{total:,}
-Bayar: Rp{bayar:,}
-Kembali: Rp{kembali:,}
-Barang:
-""" + "\n".join([f"- {n} x {qty_dict[n]} = Rp{subtotal_dict[n]:,}" for n in qty_dict]))
 
-
-# ======================
-# TAB 3: Status Stok
-# ======================
 with tab3:
     st.header("📋 Status Stok Barang")
     if not st.session_state.barang:
@@ -214,19 +191,14 @@ with tab3:
         df = pd.DataFrame(st.session_state.barang)
         kosong = df[df["stok"] == 0]
         tersedia = df[df["stok"] > 0]
-
         st.subheader("Barang Habis")
         if kosong.empty:
             st.success("Tidak ada barang yang habis.")
         else:
             st.dataframe(kosong)
-
         st.subheader("Barang Masih Tersedia")
         st.dataframe(tersedia)
 
-# ======================
-# TAB 4: Riwayat
-# ======================
 with tab4:
     st.header("🧾 Riwayat Transaksi")
     if not st.session_state.transaksi:
@@ -235,38 +207,28 @@ with tab4:
         df = pd.DataFrame(st.session_state.transaksi)
         st.dataframe(df)
 
-# ======================
-# TAB 5: Dashboard
-# ======================
 with tab5:
     st.header("📈 Dashboard")
     if not st.session_state.transaksi:
         st.info("Belum ada transaksi.")
     else:
         df = pd.DataFrame(st.session_state.transaksi)
-
         tab_a, tab_b = st.tabs(["📊 Grafik", "📋 Tabel"])
         with tab_a:
             fig1 = px.bar(df.groupby("nama")["jumlah"].sum().reset_index(), x="nama", y="jumlah", title="Penjualan per Barang")
             fig2 = px.pie(df, names="nama", values="keuntungan", title="Kontribusi Keuntungan")
             st.plotly_chart(fig1, use_container_width=True)
             st.plotly_chart(fig2, use_container_width=True)
-
         with tab_b:
             st.dataframe(df.groupby("nama")[["jumlah", "keuntungan"]].sum().reset_index())
 
-# ======================
-# TAB 6: Ekspor Data
-# ======================
 with tab6:
     st.header("📤 Ekspor Data")
     col1, col2 = st.columns(2)
-
     with col1:
         if st.session_state.barang:
             df = pd.DataFrame(st.session_state.barang)
             st.download_button("⬇️ Unduh Barang", df.to_csv(index=False), file_name="barang.csv")
-
     with col2:
         if st.session_state.transaksi:
             df = pd.DataFrame(st.session_state.transaksi)
