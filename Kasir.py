@@ -100,7 +100,7 @@ with tab1:
             st.dataframe(pd.DataFrame(st.session_state.barang))
 
 with tab2:
-    st.header("🛒 Transaksi Kasir (Versi Dropdown)")
+    st.header("🛒 Transaksi Kasir (Versi Dropdown + Angsul)")
 
     if not st.session_state.barang:
         st.warning("Belum ada barang di stok.")
@@ -127,30 +127,49 @@ with tab2:
                                       max_value=int(barang_data["stok"]),
                                       step=1)
 
+        # Hitung total harga
+        total_harga = jumlah_beli * barang_data["harga_jual"]
+
+        st.markdown(f"### 💰 Total Bayar: Rp {total_harga:,}")
+
+        # Input uang bayar
+        uang_bayar = st.number_input("💵 Uang Diterima", min_value=0, step=1000)
+
         # Simpan Transaksi
         if st.button("Simpan Transaksi"):
-            waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if uang_bayar < total_harga:
+                st.error("Uang tidak cukup.")
+            else:
+                kembalian = uang_bayar - total_harga
+                waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            # Update stok & transaksi
-            for b in st.session_state.barang:
-                if b["nama"] == barang_pilih:
-                    b["stok"] -= jumlah_beli
-                    b["terjual"] += jumlah_beli
+                # Update stok & transaksi
+                for b in st.session_state.barang:
+                    if b["nama"] == barang_pilih:
+                        b["stok"] -= jumlah_beli
+                        b["terjual"] += jumlah_beli
 
-                    keuntungan = (b["harga_jual"] - b["harga_modal"]) * jumlah_beli
-                    total = b["harga_jual"] * jumlah_beli
+                        keuntungan = (b["harga_jual"] - b["harga_modal"]) * jumlah_beli
 
-                    st.session_state.transaksi.append({
-                        "waktu": waktu,
-                        "nama": b["nama"],
-                        "kategori": b["kategori"],
-                        "jumlah": jumlah_beli,
-                        "total": total,
-                        "keuntungan": keuntungan
-                    })
+                        st.session_state.transaksi.append({
+                            "waktu": waktu,
+                            "nama": b["nama"],
+                            "kategori": b["kategori"],
+                            "jumlah": jumlah_beli,
+                            "total": total_harga,
+                            "keuntungan": keuntungan
+                        })
 
-            st.success("Transaksi berhasil disimpan.")
-
+                st.success("✅ Transaksi berhasil disimpan.")
+                st.markdown(f"""
+                ### 🧾 Struk Ringkasan:
+                - Barang: **{barang_pilih}**
+                - Jumlah: **{jumlah_beli}**
+                - Total Harga: **Rp {total_harga:,}**
+                - Uang Diterima: **Rp {uang_bayar:,}**
+                - Kembalian: **Rp {kembalian:,}**
+                - Waktu: {waktu}
+                """)
 with tab3:
     st.header("📋 Status Stok Barang")
     if not st.session_state.barang:
