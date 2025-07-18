@@ -100,76 +100,89 @@ with tab1:
             st.dataframe(pd.DataFrame(st.session_state.barang))
 
 with tab2:
-    st.header("🛒 Transaksi Kasir (Versi Dropdown + Angsul)")
+    st.header("🛒 Transaksi Kasir (Keranjang Multi-Item)")
 
     if not st.session_state.barang:
         st.warning("Belum ada barang di stok.")
     else:
         df_barang = pd.DataFrame(st.session_state.barang)
 
-        # Pilih Kategori
+        if "keranjang" not in st.session_state:
+            st.session_state.keranjang = []
+
+        # Input barang untuk keranjang
         kategori_list = df_barang["kategori"].unique().tolist()
-        kategori_pilih = st.selectbox("Pilih Kategori:", kategori_list)
+        kategori_pilih = st.selectbox("Pilih Kategori", kategori_list)
 
-        # Filter barang sesuai kategori
         df_kategori = df_barang[df_barang["kategori"] == kategori_pilih]
-
-        # Pilih Barang
         nama_barang_list = df_kategori["nama"].tolist()
-        barang_pilih = st.selectbox("Pilih Barang:", nama_barang_list)
+        barang_pilih = st.selectbox("Pilih Barang", nama_barang_list)
 
-        # Ambil data barang terpilih
         barang_data = df_kategori[df_kategori["nama"] == barang_pilih].iloc[0]
+        jumlah_beli = st.number_input(f"Jumlah '{barang_pilih}'", min_value=1, max_value=int(barang_data["stok"]), step=1)
 
-        # Input jumlah beli
-        jumlah_beli = st.number_input(f"Jumlah '{barang_pilih}'", 
-                                      min_value=1, 
-                                      max_value=int(barang_data["stok"]),
-                                      step=1)
+        if st.button("🛒 Tambah ke Keranjang"):
+            st.session_state.keranjang.append({
+                "nama": barang_pilih,
+                "kategori": kategori_pilih,
+                "jumlah": jumlah_beli,
+                "harga_satuan": barang_data["harga_jual"],
+                "subtotal": jumlah_beli * barang_data["harga_jual"]
+            })
+            st.success(f"{jumlah_beli} {barang_pilih} ditambahkan ke keranjang.")
 
-        # Hitung total harga
-        total_harga = jumlah_beli * barang_data["harga_jual"]
+        # Tampilkan keranjang
+        if st.session_state.keranjang:
+            st.subheader("🧾 Keranjang Belanja")
+            df_keranjang = pd.DataFrame(st.session_state.keranjang)
+            st.dataframe(df_keranjang)
 
-        st.markdown(f"### 💰 Total Bayar: Rp {total_harga:,}")
+            total_bayar = df_keranjang["subtotal"].sum()
+            st.markdown(f"### 💰 Total Bayar: Rp {total_bayar:,}")
 
-        # Input uang bayar
-        uang_bayar = st.number_input("💵 Uang Diterima", min_value=0, step=1000)
+            uang_bayar = st.number_input("💵 Uang Diterima", min_value=0, step=1000)
 
-        # Simpan Transaksi
-        if st.button("Simpan Transaksi"):
-            if uang_bayar < total_harga:
-                st.error("Uang tidak cukup.")
-            else:
-                kembalian = uang_bayar - total_harga
-                waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if st.button("✅ Proses Transaksi"):
+                if uang_bayar < total_bayar:
+                    st.error("Uang tidak cukup.")
+                else:
+                    kembalian = uang_bayar - total_bayar
+                    waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                # Update stok & transaksi
-                for b in st.session_state.barang:
-                    if b["nama"] == barang_pilih:
-                        b["stok"] -= jumlah_beli
-                        b["terjual"] += jumlah_beli
+                    # Update stok dan simpan transaksi
+                    for item in st.session_state.keranjang:
+                        for b in st.session_state.barang:
+                            if b["nama"] == item["nama"]:
+                                b["stok"] -= item["jumlah"]
+                                b["terjual"] += item["jumlah"]
 
-                        keuntungan = (b["harga_jual"] - b["harga_modal"]) * jumlah_beli
+                                keuntungan = (b["harga_jual"] - b["harga_modal"]) * item["jumlah"]
 
-                        st.session_state.transaksi.append({
-                            "waktu": waktu,
-                            "nama": b["nama"],
-                            "kategori": b["kategori"],
-                            "jumlah": jumlah_beli,
-                            "total": total_harga,
-                            "keuntungan": keuntungan
-                        })
+                                st.session_state.transaksi.append({
+                                    "waktu": waktu,
+                                    "nama": b["nama"],
+                                    "kategori": b["kategori"],
+                                    "jumlah": item["jumlah"],
+                                    "total": item["subtotal"],
+                                    "keuntungan": keuntungan
+                                })
 
-                st.success("✅ Transaksi berhasil disimpan.")
-                st.markdown(f"""
-                ### 🧾 Struk Ringkasan:
-                - Barang: **{barang_pilih}**
-                - Jumlah: **{jumlah_beli}**
-                - Total Harga: **Rp {total_harga:,}**
-                - Uang Diterima: **Rp {uang_bayar:,}**
-                - Kembalian: **Rp {kembalian:,}**
-                - Waktu: {waktu}
-                """)
+                    st.success("✅ Transaksi berhasil disimpan.")
+                    st.markdown(f"""
+                    ### 🧾 Struk Ringkasan:
+                    Total Belanja: **Rp {total_bayar:,}**  
+                    Uang Diterima: **Rp {uang_bayar:,}**  
+                    Kembalian: **Rp {kembalian:,}**  
+                    Waktu: {waktu}
+                    """)
+
+                    # Cetak detail struk
+                    for item in st.session_state.keranjang:
+                        st.markdown(f"- {item['nama']} x {item['jumlah']} = Rp {item['subtotal']:,}")
+
+                    # Bersihkan keranjang
+                    st.session_state.keranjang.clear()
+
 with tab3:
     st.header("📋 Status Stok Barang")
     if not st.session_state.barang:
