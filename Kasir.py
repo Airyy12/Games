@@ -82,6 +82,9 @@ if st.sidebar.button("\U0001F512 Logout"):
 menu = ["\U0001F4E6 Input Barang", "\U0001F6D2 Kasir", "\U0001F4CB Stok", "\U0001F9FE Riwayat", "\U0001F4C8 Dashboard", "\U0001F4E4 Ekspor"]
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(menu)
 
+# ======================
+# 📦 INPUT BARANG
+# ======================
 with tab1:
     st.header("\U0001F4E6 Input Barang")
     if st.session_state.role != "admin":
@@ -109,6 +112,9 @@ with tab1:
         if st.session_state.barang:
             st.dataframe(pd.DataFrame(st.session_state.barang))
 
+# ======================
+# 🛒 KASIR
+# ======================
 with tab2:
     st.header("\U0001F6D2 Transaksi Kasir")
 
@@ -204,6 +210,9 @@ with tab2:
                     st.download_button("\U0001F5A8️ Download Struk", data=struk.getvalue(), file_name="struk_toko_wawan.txt")
                     st.session_state.keranjang.clear()
 
+# ======================
+# 📋 STATUS STOK
+# ======================
 with tab3:
     st.header("\U0001F4CB Status Stok Barang")
     if not st.session_state.barang:
@@ -213,9 +222,16 @@ with tab3:
         kosong = df[df["stok"] == 0]
         tersedia = df[df["stok"] > 0]
         st.subheader("Barang Habis")
-        st.dataframe(kosong) if not kosong.empty else st.success("Tidak ada barang habis.")
+        if not kosong.empty:
+            st.dataframe(kosong)
+        else:
+            st.success("Tidak ada barang habis.")
+
         st.subheader("Barang Tersedia")
-        st.dataframe(tersedia)
+        if not tersedia.empty:
+            st.dataframe(tersedia)
+        else:
+            st.warning("Tidak ada barang tersedia.")
 
         if st.session_state.role == "admin":
             st.subheader("Edit / Hapus Barang")
@@ -243,6 +259,9 @@ with tab3:
                         simpan_data(BARANG_FILE, st.session_state.barang)
                         st.rerun()
 
+# ======================
+# 📜 RIWAYAT TRANSAKSI
+# ======================
 with tab4:
     st.header("\U0001F9FE Riwayat Transaksi")
     df = pd.DataFrame(st.session_state.transaksi)
@@ -260,6 +279,9 @@ with tab4:
 
         st.dataframe(df)
 
+# ======================
+# 📊 DASHBOARD
+# ======================
 with tab5:
     st.header("\U0001F4C8 Dashboard")
     df = pd.DataFrame(st.session_state.transaksi)
@@ -275,6 +297,9 @@ with tab5:
         with tab_b:
             st.dataframe(df.groupby("nama")[["jumlah", "keuntungan"]].sum().reset_index())
 
+# ======================
+# 📤 EKSPOR DATA
+# ======================
 with tab6:
     st.header("\U0001F4E4 Ekspor Data")
     col1, col2 = st.columns(2)
