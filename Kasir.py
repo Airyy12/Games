@@ -14,7 +14,6 @@ BARANG_FILE = "barang.json"
 TRANSAKSI_FILE = "transaksi.json"
 
 
-# === UTILITAS LOAD & SAVE DATA ===
 def load_data(file, default=[]):
     if not os.path.exists(file):
         with open(file, "w") as f:
@@ -36,9 +35,8 @@ def simpan_akun(data):
     simpan_data(AKUN_FILE, data)
 
 
-# === LOGIN ===
 def tampilkan_login():
-    st.title("\U0001F510 Login Kasir")
+    st.title("🔒 Login Kasir")
     tab1, tab2 = st.tabs(["Login", "Buat Akun Baru"])
 
     with tab1:
@@ -46,7 +44,7 @@ def tampilkan_login():
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
         role = st.radio("Role", ["admin", "kasir"], horizontal=True)
-        if st.button("Masuk", key="login"):
+        if st.button("Masuk"):
             cocok = next((a for a in data if a["username"] == username and a["password"] == password and a["role"] == role), None)
             if cocok:
                 st.session_state.login = True
@@ -60,7 +58,7 @@ def tampilkan_login():
         new_user = st.text_input("Username Baru")
         new_pass = st.text_input("Password Baru", type="password")
         new_role = st.radio("Pilih Role", ["admin", "kasir"], horizontal=True, key="daftar")
-        if st.button("Daftar", key="register"):
+        if st.button("Daftar"):
             data = load_akun()
             if any(u["username"] == new_user for u in data):
                 st.warning("Username sudah ada.")
@@ -70,7 +68,6 @@ def tampilkan_login():
                 st.success("Akun berhasil dibuat!")
 
 
-# === INIT SESSION ===
 if "login" not in st.session_state:
     st.session_state.login = False
 if not st.session_state.login:
@@ -82,20 +79,18 @@ if "barang" not in st.session_state:
 if "transaksi" not in st.session_state:
     st.session_state.transaksi = load_data(TRANSAKSI_FILE)
 
-# === SIDEBAR ===
-st.sidebar.title("\U0001F464 Pengguna")
+st.sidebar.title("👤 Pengguna")
 st.sidebar.write(f"Login sebagai: **{st.session_state.user}** ({st.session_state.role})")
-if st.sidebar.button("\U0001F512 Logout", key="logout"):
+if st.sidebar.button("🔓 Logout"):
     st.session_state.clear()
     st.rerun()
 
-# === MENU TABS ===
-menu = ["\U0001F4E6 Input Barang", "\U0001F6D2 Kasir", "\U0001F4CB Stok", "\U0001F9FE Riwayat", "\U0001F4C8 Dashboard", "\U0001F4E4 Ekspor"]
+menu = ["📦 Input Barang", "🛒 Kasir", "📋 Stok", "📖 Riwayat", "📊 Dashboard", "📤 Ekspor"]
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(menu)
 
-# === INPUT BARANG (ADMIN) ===
+# Tab 1: Input Barang
 with tab1:
-    st.header("\U0001F4E6 Input Barang")
+    st.header("📦 Input Barang")
     if st.session_state.role != "admin":
         st.warning("Hanya admin yang bisa menambahkan barang.")
     else:
@@ -105,7 +100,7 @@ with tab1:
             modal = st.number_input("Harga Modal", min_value=0)
             jual = st.number_input("Harga Jual", min_value=0)
             stok = st.number_input("Stok Awal", min_value=0, step=1)
-            simpan = st.form_submit_button("Simpan Barang")
+            simpan = st.form_submit_button("💾 Simpan Barang")
             if simpan and nama and kategori:
                 st.session_state.barang.append({
                     "nama": nama,
@@ -121,17 +116,18 @@ with tab1:
         if st.session_state.barang:
             st.dataframe(pd.DataFrame(st.session_state.barang))
 
-# === TRANSAKSI KASIR ===
+# Tab 2: Kasir
 with tab2:
-    st.header("\U0001F6D2 Transaksi Kasir")
+    st.header("🛒 Transaksi Kasir")
     if not st.session_state.barang:
         st.warning("Belum ada barang di stok.")
     else:
         df_barang = pd.DataFrame(st.session_state.barang)
+
         if "keranjang" not in st.session_state:
             st.session_state.keranjang = []
 
-        cari_barang = st.text_input("\U0001F50D Cari Barang")
+        cari_barang = st.text_input("🔍 Cari Barang")
         df_filtered = df_barang[df_barang["nama"].str.contains(cari_barang, case=False)] if cari_barang else df_barang
 
         if not df_filtered.empty:
@@ -139,7 +135,7 @@ with tab2:
             barang_data = df_filtered[df_filtered["nama"] == barang_pilih].iloc[0]
             jumlah_beli = st.number_input(f"Jumlah '{barang_pilih}'", min_value=1, max_value=int(barang_data["stok"]), step=1)
 
-            if st.button("\U0001F6D2 Tambah ke Keranjang", key="tambah_keranjang"):
+            if st.button("🛒 Tambah ke Keranjang"):
                 st.session_state.keranjang.append({
                     "nama": barang_pilih,
                     "kategori": barang_data["kategori"],
@@ -150,7 +146,7 @@ with tab2:
                 st.success(f"{jumlah_beli} {barang_pilih} ditambahkan ke keranjang.")
 
         if st.session_state.keranjang:
-            st.subheader("\U0001F4DD Keranjang Belanja")
+            st.subheader("📝 Keranjang Belanja")
             for i, item in enumerate(st.session_state.keranjang):
                 col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 1, 2, 2, 1])
                 col1.markdown(f"**{item['nama']}**")
@@ -158,21 +154,21 @@ with tab2:
                 col3.markdown(f"Jumlah: {item['jumlah']}")
                 col4.markdown(f"Harga: Rp {item['harga_satuan']:,}")
                 col5.markdown(f"Subtotal: Rp {item['subtotal']:,}")
-                if col6.button("\u274C", key=f"hapus_keranjang_{i}"):
+                if col6.button("❌", key=f"hapus_keranjang_{i}"):
                     st.session_state.keranjang.pop(i)
                     st.rerun()
 
             total_bayar = sum(item["subtotal"] for item in st.session_state.keranjang)
-            st.markdown(f"## \U0001F4B0 Total Bayar: Rp {total_bayar:,}")
+            st.markdown(f"## 💵 Total Bayar: Rp {total_bayar:,}")
+            uang_bayar = st.number_input("💵 Uang Diterima", min_value=0, step=1000)
 
-            uang_bayar = st.number_input("\U0001F4B5 Uang Diterima", min_value=0, step=1000)
-
-            if st.button("\u2705 Proses Transaksi", key="proses_transaksi"):
+            if st.button("✅ Proses Transaksi"):
                 if uang_bayar < total_bayar:
                     st.error("Uang tidak cukup.")
                 else:
                     kembalian = uang_bayar - total_bayar
                     waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
                     for item in st.session_state.keranjang:
                         for b in st.session_state.barang:
                             if b["nama"] == item["nama"]:
@@ -188,11 +184,12 @@ with tab2:
                                     "keuntungan": keuntungan,
                                     "user": st.session_state.user
                                 })
+
                     simpan_data(BARANG_FILE, st.session_state.barang)
                     simpan_data(TRANSAKSI_FILE, st.session_state.transaksi)
+
                     struk = io.StringIO()
-                    struk.write("TOKO WAWAN\n")
-                    struk.write("Jl. Contoh No. 1, Telp. 0812-XXXX-XXXX\n")
+                    struk.write("TOKO WAWAN\nJl. Contoh No. 1, Telp. 0812-XXXX-XXXX\n")
                     struk.write("="*32 + "\n")
                     struk.write(f"Waktu : {waktu}\n")
                     struk.write("-"*32 + "\n")
@@ -206,57 +203,53 @@ with tab2:
                     struk.write("="*32 + "\n")
                     struk.write("Terima kasih atas kunjungan Anda\n")
 
-                    st.success("\u2705 Transaksi berhasil.")
+                    st.success("✅ Transaksi berhasil.")
                     st.text(struk.getvalue())
-                    st.download_button("\U0001F5A8️ Download Struk", data=struk.getvalue(), file_name="struk_toko_wawan.txt")
+                    st.download_button("🖨️ Download Struk", data=struk.getvalue(), file_name="struk_toko_wawan.txt")
                     st.session_state.keranjang.clear()
 
-# === STOK BARANG ===
+# Tab 3: Stok
 with tab3:
-    st.header("\U0001F4CB Status Stok Barang")
+    st.header("📋 Status Stok Barang")
     if not st.session_state.barang:
         st.info("Belum ada barang.")
     else:
         df = pd.DataFrame(st.session_state.barang)
-        kosong = df[df["stok"] == 0]
-        tersedia = df[df["stok"] > 0]
-        st.subheader("Barang Habis")
-        if not kosong.empty:
-            st.dataframe(kosong)
-        else:
-            st.success("Tidak ada barang habis.")
-        st.subheader("Barang Tersedia")
-        st.dataframe(tersedia)
+        st.dataframe(df)
 
         if st.session_state.role == "admin":
-            st.subheader("Edit / Hapus Barang")
+            st.subheader("✏️ Edit / 🗑️ Hapus Barang")
             for i, b in enumerate(st.session_state.barang):
-                with st.expander(f"{b['nama']}"):
-                    nama_baru = st.text_input("Nama", b["nama"], key=f"nama_{b['nama']}")
-                    kategori_baru = st.text_input("Kategori", b["kategori"], key=f"kat_{b['nama']}")
-                    modal_baru = st.number_input("Modal", value=b["harga_modal"], key=f"mod_{b['nama']}")
-                    jual_baru = st.number_input("Jual", value=b["harga_jual"], key=f"jual_{b['nama']}")
-                    stok_baru = st.number_input("Stok", value=b["stok"], key=f"stok_{b['nama']}", step=1)
-
-                    if st.button("\U0001F4BE Simpan", key=f"simpan_{b['nama']}"):
-                        b.update({
-                            "nama": nama_baru,
-                            "kategori": kategori_baru,
-                            "harga_modal": modal_baru,
-                            "harga_jual": jual_baru,
-                            "stok": stok_baru
-                        })
-                        simpan_data(BARANG_FILE, st.session_state.barang)
-                        st.success("Barang diperbarui.")
-
-                    if st.button("\U0001F5D1️ Hapus", key=f"hapus_{b['nama']}"):
+                col1, col2, col3 = st.columns([4, 1, 1])
+                col1.markdown(f"**{b['nama']}** - {b['kategori']} (Stok: {b['stok']})")
+                if col2.button("✏️ Edit", key=f"edit_{i}"):
+                    with st.form(f"edit_form_{i}", clear_on_submit=True):
+                        nama_baru = st.text_input("Nama", b["nama"])
+                        kategori_baru = st.text_input("Kategori", b["kategori"])
+                        modal_baru = st.number_input("Harga Modal", value=b["harga_modal"])
+                        jual_baru = st.number_input("Harga Jual", value=b["harga_jual"])
+                        stok_baru = st.number_input("Stok", value=b["stok"], step=1)
+                        if st.form_submit_button("💾 Simpan Perubahan"):
+                            b.update({
+                                "nama": nama_baru,
+                                "kategori": kategori_baru,
+                                "harga_modal": modal_baru,
+                                "harga_jual": jual_baru,
+                                "stok": stok_baru
+                            })
+                            simpan_data(BARANG_FILE, st.session_state.barang)
+                            st.success("✅ Barang berhasil diperbarui.")
+                            st.rerun()
+                if col3.button("🗑️ Hapus", key=f"hapus_{i}"):
+                    if st.confirm(f"Yakin hapus '{b['nama']}'?"):
                         st.session_state.barang.pop(i)
                         simpan_data(BARANG_FILE, st.session_state.barang)
+                        st.success("🗑️ Barang berhasil dihapus.")
                         st.rerun()
 
-# === RIWAYAT TRANSAKSI ===
+# Tab 4: Riwayat Transaksi
 with tab4:
-    st.header("\U0001F9FE Riwayat Transaksi")
+    st.header("📖 Riwayat Transaksi")
     df = pd.DataFrame(st.session_state.transaksi)
     if df.empty:
         st.info("Belum ada transaksi.")
@@ -270,31 +263,24 @@ with tab4:
             df = df[df["user"] == st.session_state.user]
         st.dataframe(df)
 
-# === DASHBOARD ===
+# Tab 5: Dashboard
 with tab5:
-    st.header("\U0001F4C8 Dashboard")
+    st.header("📊 Dashboard")
     df = pd.DataFrame(st.session_state.transaksi)
     if df.empty:
         st.info("Belum ada transaksi.")
     else:
-        tab_a, tab_b = st.tabs(["\U0001F4CA Grafik", "\U0001F4CB Tabel"])
-        with tab_a:
-            fig1 = px.bar(df.groupby("nama")["jumlah"].sum().reset_index(), x="nama", y="jumlah", title="Penjualan per Barang")
-            fig2 = px.pie(df, names="nama", values="keuntungan", title="Kontribusi Keuntungan")
-            st.plotly_chart(fig1, use_container_width=True)
-            st.plotly_chart(fig2, use_container_width=True)
-        with tab_b:
-            st.dataframe(df.groupby("nama")[["jumlah", "keuntungan"]].sum().reset_index())
+        fig1 = px.bar(df.groupby("nama")["jumlah"].sum().reset_index(), x="nama", y="jumlah", title="Penjualan per Barang")
+        fig2 = px.pie(df, names="nama", values="keuntungan", title="Kontribusi Keuntungan")
+        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True)
 
-# === EKSPOR DATA ===
+# Tab 6: Ekspor
 with tab6:
-    st.header("\U0001F4E4 Ekspor Data")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.session_state.barang:
-            df = pd.DataFrame(st.session_state.barang)
-            st.download_button("⬇️ Unduh Barang", df.to_csv(index=False), file_name="barang.csv")
-    with col2:
-        if st.session_state.transaksi:
-            df = pd.DataFrame(st.session_state.transaksi)
-            st.download_button("⬇️ Unduh Transaksi", df.to_csv(index=False), file_name="transaksi.csv")
+    st.header("📤 Ekspor Data")
+    if st.session_state.barang:
+        df_barang = pd.DataFrame(st.session_state.barang)
+        st.download_button("⬇️ Unduh Barang", df_barang.to_csv(index=False), file_name="barang.csv")
+    if st.session_state.transaksi:
+        df_transaksi = pd.DataFrame(st.session_state.transaksi)
+        st.download_button("⬇️ Unduh Transaksi", df_transaksi.to_csv(index=False), file_name="transaksi.csv")
