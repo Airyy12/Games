@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime
 import plotly.express as px
+import io
 
 st.set_page_config(page_title="Aplikasi Kasir", layout="wide")
 
@@ -69,7 +70,6 @@ if st.sidebar.button("🔒 Logout"):
     st.session_state.clear()
     st.rerun()
 
-# Tabs
 menu = ["📦 Input Barang", "🛒 Kasir", "📋 Stok", "🧾 Riwayat", "📈 Dashboard", "📤 Ekspor"]
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(menu)
 
@@ -100,7 +100,7 @@ with tab1:
             st.dataframe(pd.DataFrame(st.session_state.barang))
 
 with tab2:
-    st.header("🛒 Transaksi Kasir (Keranjang Multi-Item + Hapus)")
+    st.header("🛒 Transaksi Kasir (Keranjang Multi-Item + Struk)")
 
     if not st.session_state.barang:
         st.warning("Belum ada barang di stok.")
@@ -110,7 +110,6 @@ with tab2:
         if "keranjang" not in st.session_state:
             st.session_state.keranjang = []
 
-        # Input barang
         kategori_list = df_barang["kategori"].unique().tolist()
         kategori_pilih = st.selectbox("Pilih Kategori", kategori_list)
 
@@ -131,7 +130,6 @@ with tab2:
             })
             st.success(f"{jumlah_beli} {barang_pilih} ditambahkan ke keranjang.")
 
-        # Tampilkan keranjang dengan hapus
         if st.session_state.keranjang:
             st.subheader("📝 Keranjang Belanja")
 
@@ -175,17 +173,25 @@ with tab2:
                                     "keuntungan": keuntungan
                                 })
 
-                    st.success("✅ Transaksi berhasil disimpan.")
-                    st.markdown(f"""
-                    ### 🧾 Struk Ringkasan:
-                    Total Belanja: **Rp {total_bayar:,}**  
-                    Uang Diterima: **Rp {uang_bayar:,}**  
-                    Kembalian: **Rp {kembalian:,}**  
-                    Waktu: {waktu}
-                    """)
-
+                    struk = io.StringIO()
+                    struk.write("TOKO WAWAN\n")
+                    struk.write("Jl. Contoh No. 1, Telp. 0812-XXXX-XXXX\n")
+                    struk.write("="*32 + "\n")
+                    struk.write(f"Waktu : {waktu}\n")
+                    struk.write("-"*32 + "\n")
                     for item in st.session_state.keranjang:
-                        st.markdown(f"- {item['nama']} x {item['jumlah']} = Rp {item['subtotal']:,}")
+                        struk.write(f"{item['nama']} x{item['jumlah']} @{item['harga_satuan']:,}\n")
+                        struk.write(f"       Rp {item['subtotal']:,}\n")
+                    struk.write("-"*32 + "\n")
+                    struk.write(f"Subtotal : Rp {total_bayar:,}\n")
+                    struk.write(f"Bayar    : Rp {uang_bayar:,}\n")
+                    struk.write(f"Kembalian: Rp {kembalian:,}\n")
+                    struk.write("="*32 + "\n")
+                    struk.write("Terima kasih atas kunjungan Anda\n")
+
+                    st.success("✅ Transaksi berhasil.")
+                    st.text(struk.getvalue())
+                    st.download_button("🖨️ Download Struk", data=struk.getvalue(), file_name="struk_toko_wawan.txt")
 
                     st.session_state.keranjang.clear()
 
