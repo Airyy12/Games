@@ -168,10 +168,67 @@ with tab4:
         st.info("Belum ada data transaksi.")
     else:
         df_trx = pd.DataFrame(st.session_state.transaksi)
-        fig1 = px.bar(df_trx.groupby("nama")["jumlah"].sum().reset_index(), x="nama", y="jumlah", title="Barang Terjual")
-        fig2 = px.pie(df_trx, names="nama", values="keuntungan", title="Kontribusi Keuntungan per Barang")
+        df_barang = pd.DataFrame(st.session_state.barang)
+
+        # ----- Grafik Barang Terjual -----
+        fig1 = px.bar(
+            df_trx.groupby("nama")["jumlah"].sum().reset_index(),
+            x="nama", y="jumlah",
+            title="Barang Terjual",
+            color_discrete_sequence=["skyblue"]
+        )
         st.plotly_chart(fig1, use_container_width=True)
+
+        # ----- Grafik Keuntungan per Barang -----
+        fig2 = px.pie(
+            df_trx, names="nama", values="keuntungan",
+            title="Kontribusi Keuntungan per Barang"
+        )
         st.plotly_chart(fig2, use_container_width=True)
+
+        # ===============================
+        # 🔢 Ringkasan Keuntungan
+        # ===============================
+        st.subheader("📋 Ringkasan Keuntungan")
+
+        # Keuntungan per barang
+        keuntungan_barang = df_trx.groupby("nama")["keuntungan"].sum().reset_index()
+
+        # Gabungkan dengan kategori dari data barang
+        df_kategori = df_barang[["nama", "kategori"]]
+        keuntungan_kategori = df_trx.merge(df_kategori, on="nama").groupby("kategori")["keuntungan"].sum().reset_index()
+
+        total_keuntungan = df_trx["keuntungan"].sum()
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("💰 Total Keuntungan", f"Rp {total_keuntungan:,.0f}")
+            st.write("**Keuntungan per Barang**")
+            st.dataframe(keuntungan_barang)
+        with col2:
+            st.write("**Keuntungan per Kategori**")
+            st.dataframe(keuntungan_kategori)
+
+        # ===============================
+        # 📈 Grafik Tambahan
+        # ===============================
+        st.subheader("📊 Grafik Berdasarkan Kategori")
+
+        # Penjualan per kategori
+        penjualan_kategori = df_trx.merge(df_kategori, on="nama").groupby("kategori")["jumlah"].sum().reset_index()
+
+        fig3 = px.bar(
+            keuntungan_kategori, x="kategori", y="keuntungan",
+            title="Keuntungan vs Kategori", color_discrete_sequence=["mediumseagreen"]
+        )
+        fig4 = px.bar(
+            penjualan_kategori, x="kategori", y="jumlah",
+            title="Penjualan vs Kategori", color_discrete_sequence=["salmon"]
+        )
+
+        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig4, use_container_width=True)
+
 
 # =============================
 # 📤 TAB 5: Ekspor Data
