@@ -100,7 +100,7 @@ with tab1:
             st.dataframe(pd.DataFrame(st.session_state.barang))
 
 with tab2:
-    st.header("🛒 Transaksi Kasir (Keranjang Multi-Item)")
+    st.header("🛒 Transaksi Kasir (Keranjang Multi-Item + Hapus)")
 
     if not st.session_state.barang:
         st.warning("Belum ada barang di stok.")
@@ -110,7 +110,7 @@ with tab2:
         if "keranjang" not in st.session_state:
             st.session_state.keranjang = []
 
-        # Input barang untuk keranjang
+        # Input barang
         kategori_list = df_barang["kategori"].unique().tolist()
         kategori_pilih = st.selectbox("Pilih Kategori", kategori_list)
 
@@ -131,14 +131,23 @@ with tab2:
             })
             st.success(f"{jumlah_beli} {barang_pilih} ditambahkan ke keranjang.")
 
-        # Tampilkan keranjang
+        # Tampilkan keranjang dengan hapus
         if st.session_state.keranjang:
-            st.subheader("🧾 Keranjang Belanja")
-            df_keranjang = pd.DataFrame(st.session_state.keranjang)
-            st.dataframe(df_keranjang)
+            st.subheader("📝 Keranjang Belanja")
 
-            total_bayar = df_keranjang["subtotal"].sum()
-            st.markdown(f"### 💰 Total Bayar: Rp {total_bayar:,}")
+            for i, item in enumerate(st.session_state.keranjang):
+                col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 1, 2, 2, 1])
+                col1.markdown(f"**{item['nama']}**")
+                col2.markdown(f"Kategori: {item['kategori']}")
+                col3.markdown(f"Jumlah: {item['jumlah']}")
+                col4.markdown(f"Harga: Rp {item['harga_satuan']:,}")
+                col5.markdown(f"Subtotal: Rp {item['subtotal']:,}")
+                if col6.button("❌", key=f"hapus_{i}"):
+                    st.session_state.keranjang.pop(i)
+                    st.rerun()
+
+            total_bayar = sum(item["subtotal"] for item in st.session_state.keranjang)
+            st.markdown(f"## 💰 Total Bayar: Rp {total_bayar:,}")
 
             uang_bayar = st.number_input("💵 Uang Diterima", min_value=0, step=1000)
 
@@ -149,7 +158,6 @@ with tab2:
                     kembalian = uang_bayar - total_bayar
                     waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                    # Update stok dan simpan transaksi
                     for item in st.session_state.keranjang:
                         for b in st.session_state.barang:
                             if b["nama"] == item["nama"]:
@@ -176,11 +184,9 @@ with tab2:
                     Waktu: {waktu}
                     """)
 
-                    # Cetak detail struk
                     for item in st.session_state.keranjang:
                         st.markdown(f"- {item['nama']} x {item['jumlah']} = Rp {item['subtotal']:,}")
 
-                    # Bersihkan keranjang
                     st.session_state.keranjang.clear()
 
 with tab3:
