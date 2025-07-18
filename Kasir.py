@@ -1,160 +1,150 @@
 import streamlit as st
+from streamlit_option_menu import option_menu
 import pandas as pd
-import os
-from datetime import datetime
+from database import load_data, save_data, update_stok_barang, get_keuntungan_data, get_transaksi_data
+from login import login_page
+import plotly.express as px
+from io import BytesIO
 
-# File penyimpanan
-USER_FILE = "akun.csv"
-BARANG_FILE = "produk.csv"
-TRANSAKSI_FILE = "riwayat_transaksi.csv"
+# Konfigurasi halaman
+st.set_page_config(page_title="Aplikasi Kasir", layout="wide")
+st.markdown("""
+    <style>
+    .big-font {
+        font-size:30px !important;
+        font-weight: bold;
+    }
+    .sidebar .css-1d391kg { background-color: #1e1e2f !important; }
+    .keuntungan-box {
+        padding: 1rem;
+        background-color: #1f2937;
+        color: white;
+        border-radius: 0.5rem;
+        text-align: center;
+        font-size: 24px;
+        font-weight: bold;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# Cek dan inisialisasi file jika belum ada
-def init_files():
-    if not os.path.exists(USER_FILE):
-        pd.DataFrame(columns=["username", "password", "role"]).to_csv(USER_FILE, index=False)
-    if not os.path.exists(BARANG_FILE):
-        pd.DataFrame(columns=["nama", "kategori", "harga_modal", "harga_jual", "stok"]).to_csv(BARANG_FILE, index=False)
-    if not os.path.exists(TRANSAKSI_FILE):
-        pd.DataFrame(columns=["waktu", "barang", "jumlah", "total", "keuntungan"]).to_csv(TRANSAKSI_FILE, index=False)
+# Data barang (contoh)
+barang_df = load_data()
 
-init_files()
+# Login
+login_info = login_page()
+if not login_info["login"]:
+    st.stop()
 
-# Load data
-df_user = pd.read_csv(USER_FILE)
-df_barang = pd.read_csv(BARANG_FILE)
-df_transaksi = pd.read_csv(TRANSAKSI_FILE)
-
-# Fungsi Login
-def login(username, password):
-    user = df_user[(df_user['username'] == username) & (df_user['password'] == password)]
-    if not user.empty:
-        return user.iloc[0]['role']
-    return None
-
-# Fungsi Registrasi
-def register(username, password, role):
-    if username in df_user['username'].values:
-        return False
-    new_user = pd.DataFrame([[username, password, role]], columns=df_user.columns)
-    new_user.to_csv(USER_FILE, mode='a', index=False, header=False)
-    return True
+role = login_info["role"]
 
 # Sidebar navigasi
-if "page" not in st.session_state:
-    st.session_state.page = "Login"
+with st.sidebar:
+    selected = option_menu("Navigasi", ["Input Barang", "Kasir", "Struk & Riwayat", "Dashboard", "Ekspor Data"],
+                           icons=["box", "cart", "file-earmark-text", "bar-chart", "cloud-arrow-down"],
+                           menu_icon="menu-up", default_index=1,
+                           styles={
+                               "container": {"padding": "5px", "background-color": "#111827"},
+                               "icon": {"color": "white", "font-size": "18px"},
+                               "nav-link": {"font-size": "16px", "text-align": "left", "margin": "5px"},
+                               "nav-link-selected": {"background-color": "#EF4444", "color": "white"},
+                           })
 
-# Halaman Login
-if st.session_state.page == "Login":
-    st.markdown("## 🔐 Login Kasir")
-    tabs = st.tabs(["🔑 Masuk", "🆕 Daftar Akun"])
+# ============================== INPUT BARANG ============================== #
+if selected == "Input Barang":
+    st.markdown("### 📦 Input Barang Baru")
+    nama = st.text_input("Nama Barang")
+    kategori = st.text_input("Kategori")
+    harga_modal = st.number_input("Harga Modal", min_value=0)
+    harga_jual = st.number_input("Harga Jual", min_value=0)
+    stok = st.number_input("Stok", min_value=0)
 
-    with tabs[0]:
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        if st.button("Masuk"):
-            role = login(username, password)
-            if role:
-                st.session_state.page = "App"
-                st.session_state.role = role
-                st.rerun()
+    if st.button("Simpan Barang"):
+        new_data = pd.DataFrame([[nama, kategori, harga_modal, harga_jual, stok]],
+                                 columns=["nama", "kategori", "harga_modal", "harga_jual", "stok"])
+        barang_df = pd.concat([barang_df, new_data], ignore_index=True)
+        save_data(barang_df)
+        st.success("Barang berhasil disimpan!")
+
+# ============================== KASIR ============================== #
+elif selected == "Kasir":
+    st.markdown("### 🛒 Transaksi Kasir")
+    kategori_list = barang_df['kategori'].unique().tolist()
+    kategori = st.selectbox("Pilih Kategori:", kategori_list)
+
+    barang_terpilih_df = barang_df[barang_df['kategori'] == kategori]
+    pilihan_barang = st.multiselect("Pilih Barang:", barang_terpilih_df['nama'].tolist())
+
+    jumlah_barang = {}
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### Jumlah Barang")
+        for barang in pilihan_barang:
+            jumlah_barang[barang] = st.number_input(f"Jumlah '{barang}'", min_value=1, step=1, key=barang)
+
+    with col2:
+        st.markdown("#### Status Stok Barang")
+        for barang in pilihan_barang:
+            stok = barang_df[barang_df['nama'] == barang]['stok'].values[0]
+            if stok <= 0:
+                st.error(f"'{barang}' habis!")
+            elif stok < jumlah_barang[barang]:
+                st.warning(f"'{barang}' stok kurang ({stok} tersisa)")
             else:
-                st.error("Login gagal. Periksa username dan password.")
+                st.success(f"'{barang}' tersedia ({stok})")
 
-    with tabs[1]:
-        new_user = st.text_input("Username Baru")
-        new_pass = st.text_input("Password Baru", type="password")
-        new_role = st.radio("Role", ["admin", "kasir"])
-        if st.button("Daftar"):
-            if register(new_user, new_pass, new_role):
-                st.success("Berhasil membuat akun! Silakan login.")
-            else:
-                st.warning("Username sudah digunakan.")
+    st.markdown("### 🧾 Ringkasan Belanja")
+    if st.button("Proses Transaksi"):
+        total = 0
+        transaksi_list = []
+        for barang in jumlah_barang:
+            df_row = barang_df[barang_df['nama'] == barang]
+            harga = df_row['harga_jual'].values[0]
+            jumlah = jumlah_barang[barang]
+            total += harga * jumlah
+            update_stok_barang(barang, -jumlah)
+            transaksi_list.append({"barang": barang, "jumlah": jumlah, "total": harga * jumlah})
+        st.success(f"Transaksi berhasil. Total: Rp{total:,}")
 
-# Halaman utama aplikasi
-elif st.session_state.page == "App":
-    menu = st.sidebar.radio("Navigasi", ["Input Barang", "Kasir", "Struk & Riwayat", "Dashboard", "Ekspor Data"])
+# ============================== STRUK & RIWAYAT ============================== #
+elif selected == "Struk & Riwayat":
+    st.markdown("### 📜 Riwayat Transaksi")
+    transaksi_df = get_transaksi_data()
+    if not transaksi_df.empty:
+        st.dataframe(transaksi_df, use_container_width=True)
+    else:
+        st.info("Belum ada transaksi.")
 
-    if menu == "Input Barang" and st.session_state.role == "admin":
-        st.header("📦 Input Barang Baru")
-        with st.form("input_form"):
-            nama = st.text_input("Nama Barang")
-            kategori = st.text_input("Kategori")
-            harga_modal = st.number_input("Harga Modal", min_value=0)
-            harga_jual = st.number_input("Harga Jual", min_value=0)
-            stok = st.number_input("Stok", min_value=0)
-            submitted = st.form_submit_button("Simpan")
+# ============================== DASHBOARD ============================== #
+elif selected == "Dashboard":
+    st.markdown("### 📊 Dashboard Penjualan")
+    tab1, tab2 = st.tabs(["📋 Tabel Keuntungan", "📈 Grafik"])
 
-            if submitted:
-                new = pd.DataFrame([[nama, kategori, harga_modal, harga_jual, stok]], columns=df_barang.columns)
-                new.to_csv(BARANG_FILE, mode='a', index=False, header=False)
-                st.success("Barang berhasil ditambahkan!")
+    df_keuntungan_barang, df_keuntungan_kategori, total_untung = get_keuntungan_data()
 
-    elif menu == "Kasir":
-        st.header("🛍️ Transaksi Kasir")
+    with tab1:
+        st.markdown('<div class="keuntungan-box">Total Keuntungan: Rp {:,}</div>'.format(total_untung), unsafe_allow_html=True)
+        st.markdown("#### Keuntungan per Barang")
+        st.dataframe(df_keuntungan_barang, use_container_width=True)
 
-        tab1, tab2 = st.tabs(["🛒 Transaksi", "📦 Status Stok Barang"])
+        st.markdown("#### Keuntungan per Kategori")
+        st.dataframe(df_keuntungan_kategori, use_container_width=True)
 
-        with tab1:
-            kategori = st.selectbox("Pilih Kategori:", df_barang['kategori'].unique())
-            items = df_barang[df_barang['kategori'] == kategori]
-            selected_items = st.multiselect("Pilih Barang:", items['nama'].tolist())
+    with tab2:
+        fig = px.bar(df_keuntungan_barang, x='nama', y='keuntungan', title='Keuntungan per Barang')
+        st.plotly_chart(fig, use_container_width=True)
 
-            jumlah_dict = {}
-            for nama_barang in selected_items:
-                jumlah = st.number_input(f"Jumlah '{nama_barang}'", min_value=1, value=1, step=1)
-                jumlah_dict[nama_barang] = jumlah
+# ============================== EKSPOR DATA ============================== #
+elif selected == "Ekspor Data":
+    st.markdown("### 📁 Ekspor Data")
+    df_keuntungan_barang, df_keuntungan_kategori, _ = get_keuntungan_data()
+    transaksi_df = get_transaksi_data()
 
-            if st.button("Simpan Transaksi"):
-                total = 0
-                keuntungan = 0
-                waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                for nama_barang, jumlah in jumlah_dict.items():
-                    barang = df_barang[df_barang['nama'] == nama_barang].iloc[0]
-                    total_harga = barang['harga_jual'] * jumlah
-                    untung = (barang['harga_jual'] - barang['harga_modal']) * jumlah
-                    new_row = pd.DataFrame([[waktu, nama_barang, jumlah, total_harga, untung]], columns=df_transaksi.columns)
-                    new_row.to_csv(TRANSAKSI_FILE, mode='a', index=False, header=False)
-                    total += total_harga
-                    keuntungan += untung
-                    # update stok
-                    df_barang.loc[df_barang['nama'] == nama_barang, 'stok'] -= jumlah
-                    df_barang.to_csv(BARANG_FILE, index=False)
+    excel_buffer = BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+        barang_df.to_excel(writer, sheet_name="Data Barang", index=False)
+        df_keuntungan_barang.to_excel(writer, sheet_name="Keuntungan Barang", index=False)
+        df_keuntungan_kategori.to_excel(writer, sheet_name="Keuntungan Kategori", index=False)
+        transaksi_df.to_excel(writer, sheet_name="Riwayat Transaksi", index=False)
 
-                st.success(f"Total Belanja: Rp {total}")
-
-        with tab2:
-            st.subheader("❌ Barang Habis")
-            habis = df_barang[df_barang['stok'] == 0]
-            if habis.empty:
-                st.success("Semua barang tersedia")
-            else:
-                st.dataframe(habis[['nama', 'stok']])
-
-            st.subheader("✅ Barang Tersedia")
-            tersedia = df_barang[df_barang['stok'] > 0]
-            st.dataframe(tersedia[['nama', 'stok']])
-
-    elif menu == "Struk & Riwayat":
-        st.header("📃 Struk dan Riwayat Transaksi")
-        df = pd.read_csv(TRANSAKSI_FILE)
-        st.dataframe(df)
-
-    elif menu == "Dashboard":
-        st.header("📊 Dashboard Penjualan")
-
-        keuntungan_total = df_transaksi['keuntungan'].sum()
-        st.markdown(f"### 💰 Total Keuntungan: <span style='color:lime;font-size:30px'>Rp {keuntungan_total:,}</span>", unsafe_allow_html=True)
-
-        keuntungan_barang = df_transaksi.groupby('barang')['keuntungan'].sum().reset_index()
-        st.subheader("Keuntungan per Barang")
-        st.dataframe(keuntungan_barang, use_container_width=True)
-
-        df_join = df_transaksi.merge(df_barang[['nama', 'kategori']], left_on='barang', right_on='nama', how='left')
-        keuntungan_kategori = df_join.groupby('kategori')['keuntungan'].sum().reset_index()
-        st.subheader("Keuntungan per Kategori")
-        st.dataframe(keuntungan_kategori, use_container_width=True)
-
-    elif menu == "Ekspor Data":
-        st.header("⬇️ Ekspor Data")
-        csv = df_transaksi.to_csv(index=False).encode('utf-8')
-        st.download_button("Download Transaksi", csv, "transaksi.csv", "text/csv")
+    st.download_button("📥 Unduh Laporan Excel", data=excel_buffer.getvalue(), file_name="laporan_kasir.xlsx")
