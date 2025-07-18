@@ -100,88 +100,56 @@ with tab1:
             st.dataframe(pd.DataFrame(st.session_state.barang))
 
 with tab2:
-    st.header("🛒 Transaksi Kasir")
+    st.header("🛒 Transaksi Kasir (Versi Dropdown)")
+
     if not st.session_state.barang:
         st.warning("Belum ada barang di stok.")
     else:
-        df_all = pd.DataFrame(st.session_state.barang)
-        kategori_unik = df_all["kategori"].unique().tolist()
+        df_barang = pd.DataFrame(st.session_state.barang)
 
-        st.subheader("📂 Filter Kategori")
-        kategori_pilih = st.selectbox("Pilih Kategori:", ["Semua"] + kategori_unik)
-        df_filtered = df_all if kategori_pilih == "Semua" else df_all[df_all["kategori"] == kategori_pilih]
+        # Pilih Kategori
+        kategori_list = df_barang["kategori"].unique().tolist()
+        kategori_pilih = st.selectbox("Pilih Kategori:", kategori_list)
 
-        st.markdown("## 📋 Daftar Barang untuk Transaksi")
+        # Filter barang sesuai kategori
+        df_kategori = df_barang[df_barang["kategori"] == kategori_pilih]
 
-        qty_dict = {}
-        subtotal_dict = {}
-        total = 0
-        barang_dibeli = []
+        # Pilih Barang
+        nama_barang_list = df_kategori["nama"].tolist()
+        barang_pilih = st.selectbox("Pilih Barang:", nama_barang_list)
 
-        for idx, b in enumerate(df_filtered.to_dict("records")):
-            nama = b["nama"]
-            stok = b["stok"]
-            harga_jual = b["harga_jual"]
+        # Ambil data barang terpilih
+        barang_data = df_kategori[df_kategori["nama"] == barang_pilih].iloc[0]
 
-            if stok <= 0:
-                continue
+        # Input jumlah beli
+        jumlah_beli = st.number_input(f"Jumlah '{barang_pilih}'", 
+                                      min_value=1, 
+                                      max_value=int(barang_data["stok"]),
+                                      step=1)
 
-            if f"qty_{nama}" not in st.session_state:
-                st.session_state[f"qty_{nama}"] = 0
-            if f"hapus_{nama}" not in st.session_state:
-                st.session_state[f"hapus_{nama}"] = False
+        # Simpan Transaksi
+        if st.button("Simpan Transaksi"):
+            waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            if st.session_state[f"hapus_{nama}"]:
-                st.session_state[f"qty_{nama}"] = 0
-                st.session_state[f"hapus_{nama}"] = False
+            # Update stok & transaksi
+            for b in st.session_state.barang:
+                if b["nama"] == barang_pilih:
+                    b["stok"] -= jumlah_beli
+                    b["terjual"] += jumlah_beli
 
-            col1, col2, col3 = st.columns([4, 2, 1])
-            with col1:
-                st.markdown(f"**{nama}** (Stok: {stok}) - Rp {harga_jual:,}")
-            with col2:
-                qty = st.number_input(
-                    f"Jumlah untuk '{nama}'", min_value=0, max_value=stok,
-                    step=1, key=f"qty_{nama}"
-                )
-            with col3:
-                if st.button("🗑️ Hapus", key=f"hapusbtn_{nama}"):
-                    st.session_state[f"hapus_{nama}"] = True
+                    keuntungan = (b["harga_jual"] - b["harga_modal"]) * jumlah_beli
+                    total = b["harga_jual"] * jumlah_beli
 
-            if st.session_state[f"qty_{nama}"] > 0:
-                qty_dict[nama] = st.session_state[f"qty_{nama}"]
-                subtotal = st.session_state[f"qty_{nama}"] * harga_jual
-                subtotal_dict[nama] = subtotal
-                total += subtotal
-                barang_dibeli.append((nama, st.session_state[f"qty_{nama}"], subtotal))
+                    st.session_state.transaksi.append({
+                        "waktu": waktu,
+                        "nama": b["nama"],
+                        "kategori": b["kategori"],
+                        "jumlah": jumlah_beli,
+                        "total": total,
+                        "keuntungan": keuntungan
+                    })
 
-        if barang_dibeli:
-            st.markdown("---")
-            st.markdown("## 🧾 Ringkasan")
-            for nama, qty, subtotal in barang_dibeli:
-                st.write(f"- {nama} x {qty} = Rp{subtotal:,}")
-            st.markdown(f"### 💰 **Total Bayar: Rp{total:,}**")
-
-            bayar = st.number_input("💵 Uang Diterima", min_value=0, step=1000)
-            if st.button("✅ Proses Pembayaran"):
-                if bayar < total:
-                    st.error("Uang tidak cukup.")
-                else:
-                    kembali = bayar - total
-                    waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-                    for nama, qty, subtotal in barang_dibeli:
-                        barang = next(b for b in st.session_state.barang if b["nama"] == nama)
-                        barang["stok"] -= qty
-                        barang["terjual"] += qty
-                        st.session_state.transaksi.append({
-                            "waktu": waktu,
-                            "nama": nama,
-                            "kategori": barang["kategori"],
-                            "jumlah": qty,
-                            "total": subtotal,
-                            "keuntungan": (barang["harga_jual"] - barang["harga_modal"]) * qty
-                        })
-                    st.success("✅ Transaksi berhasil!")
+            st.success("Transaksi berhasil disimpan.")
 
 with tab3:
     st.header("📋 Status Stok Barang")
