@@ -80,33 +80,59 @@ with tab2:
     if not st.session_state.barang:
         st.warning("Belum ada barang di stok.")
     else:
-        df = pd.DataFrame(st.session_state.barang)
+        df_barang = pd.DataFrame(st.session_state.barang)
 
-        kategori_unik = df["kategori"].unique().tolist()
+        # ==== Langkah 1: Inisialisasi keranjang ====
+        if "keranjang" not in st.session_state:
+            st.session_state.keranjang = {}
+
+        # ==== Langkah 2: Filter kategori hanya untuk tampilan ====
+        kategori_unik = df_barang["kategori"].unique().tolist()
         kategori_pilih = st.selectbox("Filter Kategori:", ["Semua"] + kategori_unik)
 
         if kategori_pilih != "Semua":
-            df = df[df["kategori"] == kategori_pilih]
+            df_filter = df_barang[df_barang["kategori"] == kategori_pilih]
+        else:
+            df_filter = df_barang
 
-        daftar_nama = df["nama"].tolist()
-        barang_dipilih = st.multiselect("Pilih Barang:", daftar_nama)
+        daftar_nama = df_filter["nama"].tolist()
+        barang_dipilih = st.selectbox("Pilih Barang untuk Ditambahkan ke Keranjang:", [""] + daftar_nama)
 
         if barang_dipilih:
+            if st.button("➕ Tambah ke Keranjang"):
+                if barang_dipilih not in st.session_state.keranjang:
+                    st.session_state.keranjang[barang_dipilih] = 1
+                else:
+                    st.session_state.keranjang[barang_dipilih] += 1
+                st.success(f"{barang_dipilih} ditambahkan ke keranjang.")
+
+        # ==== Langkah 3: Tampilkan isi keranjang ====
+        if st.session_state.keranjang:
+            st.write("### 🧺 Keranjang Belanja")
+            total = 0
             qty_dict = {}
             subtotal_dict = {}
-            total = 0
-            for nama in barang_dipilih:
+
+            for nama, qty in st.session_state.keranjang.items():
                 barang = next(b for b in st.session_state.barang if b["nama"] == nama)
-                qty = st.number_input(f"Jumlah '{nama}'", min_value=1, step=1, key=f"qty_{nama}")
-                subtotal = qty * barang["harga_jual"]
-                qty_dict[nama] = qty
+                col1, col2, col3 = st.columns([5, 3, 2])
+                with col1:
+                    st.write(f"**{nama}** - Rp {barang['harga_jual']:,}")
+                with col2:
+                    qty_input = st.number_input(f"Jumlah {nama}", min_value=1, step=1, value=qty, key=f"qty_{nama}")
+                    qty_dict[nama] = qty_input
+                with col3:
+                    if st.button("🗑️ Hapus", key=f"del_{nama}"):
+                        del st.session_state.keranjang[nama]
+                        st.rerun()
+                subtotal = qty_input * barang["harga_jual"]
                 subtotal_dict[nama] = subtotal
                 total += subtotal
 
-            st.write("### Ringkasan Belanja")
-            for nama in barang_dipilih:
+            st.write("### Total Belanja")
+            for nama in st.session_state.keranjang:
                 st.write(f"- {nama} x {qty_dict[nama]} = Rp {subtotal_dict[nama]:,}")
-            st.write(f"### Total: Rp {total:,}")
+            st.write(f"### 🧾 Total: Rp {total:,}")
 
             bayar = st.number_input("Bayar (Rp)", min_value=0, step=1000)
             if st.button("💵 Proses Pembayaran"):
@@ -116,8 +142,8 @@ with tab2:
                     kembali = bayar - total
                     waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                    # Update stok dan catat transaksi per item
-                    for nama in barang_dipilih:
+                    # Simpan transaksi & update stok
+                    for nama in st.session_state.keranjang:
                         barang = next(b for b in st.session_state.barang if b["nama"] == nama)
                         jumlah = qty_dict[nama]
                         if jumlah <= barang["stok"]:
@@ -131,22 +157,26 @@ with tab2:
                                 "keuntungan": (barang["harga_jual"] - barang["harga_modal"]) * jumlah
                             })
 
-                    # Reset qty input
-                    for nama in barang_dipilih:
-                        st.session_state.pop(f"qty_{nama}", None)
+                    st.session_state.keranjang.clear()
+                    for k in list(st.session_state.keys()):
+                        if k.startswith("qty_"):
+                            del st.session_state[k]
 
-                    # Tampilkan struk
                     st.success("Transaksi berhasil!")
-                    st.markdown("""
-                    #### 🧾 Struk Pembelian
-                    """)
+
+                    # Struk
+                    st.markdown("#### 🧾 Struk Pembelian")
                     st.code(f"""
 Waktu: {waktu}
 Total: Rp {total:,}
 Bayar: Rp {bayar:,}
 Kembali: Rp {kembali:,}
 Barang:
-""" + "\n".join([f"- {n} x {qty_dict[n]} = Rp {subtotal_dict[n]:,}" for n in barang_dipilih]))
+""" + "\n".join([f"- {n} x {qty_dict[n]} = Rp {subtotal_dict[n]:,}" for n in qty_dict]))
+
+        else:
+            st.info("Keranjang kosong. Silakan pilih barang dari daftar.")
+
 
 # =============================
 # 🧾 TAB 3: Riwayat Transaksi
