@@ -114,6 +114,7 @@ with tab1:
 # ======================
 with tab2:
     st.header("🛒 Transaksi Kasir")
+
     if not st.session_state.barang:
         st.warning("Belum ada barang.")
     else:
@@ -127,41 +128,57 @@ with tab2:
             total = 0
             qty_dict, subtotal_dict = {}, {}
 
+            st.markdown("---")
             for nama in barang_dipilih:
                 b = next(x for x in st.session_state.barang if x["nama"] == nama)
-                qty = st.number_input(f"Jumlah {nama} (stok: {b['stok']})", 1, b["stok"], step=1, key=f"qty_{nama}")
-                subtotal = qty * b["harga_jual"]
-                total += subtotal
-                qty_dict[nama] = qty
-                subtotal_dict[nama] = subtotal
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    st.markdown(f"#### {nama} (stok: {b['stok']})")
+                with col2:
+                    qty = st.number_input(
+                        f"Jumlah {nama}",
+                        min_value=1,
+                        max_value=b["stok"],
+                        step=1,
+                        key=f"qty_{nama}"
+                    )
+                    subtotal = qty * b["harga_jual"]
+                    qty_dict[nama] = qty
+                    subtotal_dict[nama] = subtotal
+                    total += subtotal
 
+            st.markdown("---")
             st.subheader("🧾 Ringkasan")
             for nama in barang_dipilih:
-                st.write(f"- {nama} x {qty_dict[nama]} = Rp{subtotal_dict[nama]:,}")
-            st.write(f"### Total Bayar: Rp{total:,}")
+                st.markdown(f"- **{nama}** x {qty_dict[nama]} = Rp{subtotal_dict[nama]:,}")
 
-            bayar = st.number_input("Uang Diterima", min_value=0)
-            if st.button("💵 Bayar"):
-                if bayar < total:
-                    st.error("Uang tidak cukup.")
-                else:
-                    kembali = bayar - total
-                    waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    for nama in barang_dipilih:
-                        b = next(x for x in st.session_state.barang if x["nama"] == nama)
-                        jumlah = qty_dict[nama]
-                        b["stok"] -= jumlah
-                        b["terjual"] += jumlah
-                        st.session_state.transaksi.append({
-                            "waktu": waktu,
-                            "nama": nama,
-                            "kategori": b["kategori"],
-                            "jumlah": jumlah,
-                            "total": subtotal_dict[nama],
-                            "keuntungan": (b["harga_jual"] - b["harga_modal"]) * jumlah
-                        })
-                    st.success("Transaksi berhasil!")
-                    st.info(f"Kembali: Rp {kembali:,}")
+            st.markdown(f"### 💰 Total Bayar: Rp{total:,}")
+
+            col_bayar, col_btn = st.columns([2, 1])
+            with col_bayar:
+                bayar = st.number_input("Uang Diterima", min_value=0, step=1000)
+            with col_btn:
+                if st.button("💵 Bayar"):
+                    if bayar < total:
+                        st.error("Uang tidak cukup.")
+                    else:
+                        kembali = bayar - total
+                        waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        for nama in barang_dipilih:
+                            b = next(x for x in st.session_state.barang if x["nama"] == nama)
+                            jumlah = qty_dict[nama]
+                            b["stok"] -= jumlah
+                            b["terjual"] += jumlah
+                            st.session_state.transaksi.append({
+                                "waktu": waktu,
+                                "nama": nama,
+                                "kategori": b["kategori"],
+                                "jumlah": jumlah,
+                                "total": subtotal_dict[nama],
+                                "keuntungan": (b["harga_jual"] - b["harga_modal"]) * jumlah
+                            })
+                        st.success("✅ Transaksi berhasil disimpan.")
+                        st.info(f"💵 Kembalian: Rp {kembali:,}")
 
 # ======================
 # TAB 3: Status Stok
