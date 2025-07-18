@@ -193,71 +193,57 @@ with tab3:
 # 📈 TAB 4: Dashboard Penjualan
 # =============================
 with tab4:
-    st.header("📈 Grafik Penjualan & Keuntungan")
-    if not st.session_state.transaksi:
-        st.info("Belum ada data transaksi.")
+    st.header("📊 Grafik Penjualan & Keuntungan")
+
+    tab_dashboard = st.tabs(["📋 Tabel", "📈 Grafik"])
+
+    # Pastikan data tersedia
+    if st.session_state.transaksi:
+        df_transaksi = pd.DataFrame(st.session_state.transaksi)
+
+        # Tambahkan info kategori ke transaksi
+        for tr in st.session_state.transaksi:
+            barang = next((b for b in st.session_state.barang if b["nama"] == tr["nama"]), None)
+            tr["kategori"] = barang["kategori"] if barang else "Tidak diketahui"
+
+        df_transaksi = pd.DataFrame(st.session_state.transaksi)
+
+        # Tab TABEL
+        with tab_dashboard[0]:
+            st.subheader("💰 Tabel Keuntungan")
+
+            keuntungan_total = df_transaksi["keuntungan"].sum()
+            st.metric("Total Keuntungan", f"Rp {keuntungan_total:,.0f}")
+
+            keuntungan_per_barang = df_transaksi.groupby("nama")["keuntungan"].sum().reset_index()
+            keuntungan_per_kategori = df_transaksi.groupby("kategori")["keuntungan"].sum().reset_index()
+
+            st.write("### Keuntungan per Barang")
+            st.dataframe(keuntungan_per_barang, use_container_width=True)
+
+            st.write("### Keuntungan per Kategori")
+            st.dataframe(keuntungan_per_kategori, use_container_width=True)
+
+        # Tab GRAFIK
+        with tab_dashboard[1]:
+            st.subheader("📊 Grafik")
+
+            penjualan_per_barang = df_transaksi.groupby("nama")["jumlah"].sum().reset_index()
+            fig1 = px.bar(penjualan_per_barang, x="nama", y="jumlah", title="Jumlah Penjualan per Barang",
+                          labels={"jumlah": "Jumlah Terjual", "nama": "Nama Barang"}, color="nama")
+            st.plotly_chart(fig1, use_container_width=True)
+
+            keuntungan_per_kategori = df_transaksi.groupby("kategori")["keuntungan"].sum().reset_index()
+            fig2 = px.bar(keuntungan_per_kategori, x="kategori", y="keuntungan", title="Keuntungan per Kategori",
+                          labels={"keuntungan": "Total Keuntungan", "kategori": "Kategori"}, color="kategori")
+            st.plotly_chart(fig2, use_container_width=True)
+
+            penjualan_per_kategori = df_transaksi.groupby("kategori")["jumlah"].sum().reset_index()
+            fig3 = px.pie(penjualan_per_kategori, values="jumlah", names="kategori", title="Distribusi Penjualan per Kategori")
+            st.plotly_chart(fig3, use_container_width=True)
+
     else:
-        df_trx = pd.DataFrame(st.session_state.transaksi)
-        df_barang = pd.DataFrame(st.session_state.barang)
-
-        # ----- Grafik Barang Terjual -----
-        fig1 = px.bar(
-            df_trx.groupby("nama")["jumlah"].sum().reset_index(),
-            x="nama", y="jumlah",
-            title="Barang Terjual",
-            color_discrete_sequence=["skyblue"]
-        )
-        st.plotly_chart(fig1, use_container_width=True)
-
-        # ----- Grafik Keuntungan per Barang -----
-        fig2 = px.pie(
-            df_trx, names="nama", values="keuntungan",
-            title="Kontribusi Keuntungan per Barang"
-        )
-        st.plotly_chart(fig2, use_container_width=True)
-
-        # ===============================
-        # 🔢 Ringkasan Keuntungan
-        # ===============================
-        st.subheader("📋 Ringkasan Keuntungan")
-
-        # Keuntungan per barang
-        keuntungan_barang = df_trx.groupby("nama")["keuntungan"].sum().reset_index()
-
-        # Gabungkan dengan kategori dari data barang
-        df_kategori = df_barang[["nama", "kategori"]]
-        keuntungan_kategori = df_trx.merge(df_kategori, on="nama").groupby("kategori")["keuntungan"].sum().reset_index()
-
-        total_keuntungan = df_trx["keuntungan"].sum()
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("💰 Total Keuntungan", f"Rp {total_keuntungan:,.0f}")
-            st.write("**Keuntungan per Barang**")
-            st.dataframe(keuntungan_barang)
-        with col2:
-            st.write("**Keuntungan per Kategori**")
-            st.dataframe(keuntungan_kategori)
-
-        # ===============================
-        # 📈 Grafik Tambahan
-        # ===============================
-        st.subheader("📊 Grafik Berdasarkan Kategori")
-
-        # Penjualan per kategori
-        penjualan_kategori = df_trx.merge(df_kategori, on="nama").groupby("kategori")["jumlah"].sum().reset_index()
-
-        fig3 = px.bar(
-            keuntungan_kategori, x="kategori", y="keuntungan",
-            title="Keuntungan vs Kategori", color_discrete_sequence=["mediumseagreen"]
-        )
-        fig4 = px.bar(
-            penjualan_kategori, x="kategori", y="jumlah",
-            title="Penjualan vs Kategori", color_discrete_sequence=["salmon"]
-        )
-
-        st.plotly_chart(fig3, use_container_width=True)
-        st.plotly_chart(fig4, use_container_width=True)
+        st.info("Belum ada transaksi untuk ditampilkan.")
 
 
 # =============================
