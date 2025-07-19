@@ -61,13 +61,12 @@ def login():
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
     if st.button("Login"):
-        for a in akun:
-            if a["username"] == username and check_password(password, a["password"]):
-                st.session_state.login = {"username": username, "role": a["role"]}
-                st.success("Login berhasil!")
-                st.experimental_rerun()
-        st.error("Username atau password salah.")
-        st.stop()
+    for a in akun:
+        if a["username"] == username and check_password(password, a["password"]):
+            st.session_state.login = {"username": username, "role": a["role"]}
+            st.success("Login berhasil! Memuat aplikasi...")
+            st.stop()  # Ini cukup, karena di main akan rerun dan menu akan tampil
+    st.error("Username atau password salah.")
 
 # Dashboard
 def halaman_dashboard():
