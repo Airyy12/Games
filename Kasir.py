@@ -241,15 +241,17 @@ with tab3:
             st.subheader("✏️ Edit / 🗑️ Hapus Barang")
             for i, b in enumerate(st.session_state.barang):
                 with st.expander(f"{b['nama']} - {b['kategori']} (Stok: {b['stok']})"):
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        mode = st.radio("Mode", ["Edit", "Hapus"], horizontal=True, key=f"mode_{i}")
-                        if mode == "Edit":
+                    mode = st.radio("Mode", ["✏️ Edit", "🗑️ Hapus"], horizontal=True, key=f"mode_{i}")
+                    
+                    if mode == "✏️ Edit":
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
                             nama_baru = st.text_input("Nama", b["nama"], key=f"nama_{i}")
                             kategori_baru = st.text_input("Kategori", b["kategori"], key=f"kat_{i}")
                             modal_baru = st.number_input("Modal", value=b["harga_modal"], key=f"mod_{i}")
                             jual_baru = st.number_input("Jual", value=b["harga_jual"], key=f"jual_{i}")
                             stok_baru = st.number_input("Stok", value=b["stok"], key=f"stok_{i}", step=1)
+                        with col2:
                             if st.button("💾 Edit", key=f"simpan_{i}"):
                                 b.update({
                                     "nama": nama_baru,
@@ -260,17 +262,18 @@ with tab3:
                                 })
                                 simpan_data(BARANG_FILE, st.session_state.barang)
                                 st.success("Barang diperbarui.")
-                        else:  # Hapus mode
-                            st.text_input("Nama", b["nama"], disabled=True, key=f"hapus_nama_{i}")
-                            jumlah_hapus = st.number_input("Jumlah yang ingin dihapus", min_value=1, max_value=b["stok"], step=1, key=f"hapus_jml_{i}")
-                            if st.button("🗑️ Hapus Barang", key=f"hapus_{i}"):
-                                if jumlah_hapus == b["stok"]:
-                                    st.session_state.barang.pop(i)
-                                else:
-                                    b["stok"] -= jumlah_hapus
-                                simpan_data(BARANG_FILE, st.session_state.barang)
-                                st.success("Barang berhasil dihapus sebagian/seluruhnya.")
-                                st.rerun()
+                    else:  # 🗑️ Hapus
+                        st.text_input("Nama", b["nama"], key=f"hapus_nama_{i}", disabled=True)
+                        jumlah_hapus = st.number_input("Jumlah Stok yang Dihapus", min_value=1, max_value=b["stok"], step=1, key=f"hapus_jml_{i}")
+                        if st.button("🗑️ Hapus", key=f"hapus_{i}"):
+                            if jumlah_hapus >= b["stok"]:
+                                st.session_state.barang.pop(i)
+                                st.success(f"Barang '{b['nama']}' dihapus total.")
+                            else:
+                                b["stok"] -= jumlah_hapus
+                                st.success(f"{jumlah_hapus} stok '{b['nama']}' dihapus.")
+                            simpan_data(BARANG_FILE, st.session_state.barang)
+                            st.rerun()
 
 # 🧾 Riwayat Transaksi
 with tab4:
