@@ -67,6 +67,8 @@ def login():
                 st.success("Login berhasil! Memuat aplikasi...")
                 st.stop()  # Ini cukup, karena di main akan rerun dan menu akan tampil
         st.error("Username atau password salah.")
+        return
+
 
 # Dashboard
 def halaman_dashboard():
