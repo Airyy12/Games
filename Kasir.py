@@ -80,6 +80,7 @@ def halaman_dashboard():
     col1.metric("Jumlah Transaksi", total_transaksi)
     col2.metric("Total Pendapatan", f"Rp {total_pendapatan:,.0f}")
 
+
 # Barang
 def halaman_barang():
     st.subheader("📦 Manajemen Barang")
@@ -135,7 +136,9 @@ def halaman_barang():
             save_data(BARANG_HAPUS_FILE, barang_dihapus)
             st.success("Barang berhasil dihapus.")
 
+
 # Transaksi
+
 def halaman_transaksi():
     st.subheader("🛒 Transaksi")
     barang = load_data(BARANG_FILE)
@@ -156,9 +159,7 @@ def halaman_transaksi():
         st.session_state.keranjang = []
 
     if st.button("➕ Tambah ke Keranjang"):
-        # Cek apakah barang sudah ada di keranjang
-        existing = next((item for item in st.session_state.keranjang
-                         if item['nama'] == b_dipilih['nama'] and item['kategori'] == b_dipilih['kategori']), None)
+        existing = next((item for item in st.session_state.keranjang if item['nama'] == b_dipilih['nama'] and item['kategori'] == b_dipilih['kategori']), None)
         if existing:
             existing['qty'] += qty
             existing['subtotal'] = existing['qty'] * existing['harga']
@@ -174,27 +175,23 @@ def halaman_transaksi():
 
     if st.session_state.keranjang:
         st.write("### 🧺 Keranjang Belanja")
-
         total = 0
         for idx, item in enumerate(st.session_state.keranjang):
             with st.container():
-                cols = st.columns([3, 2, 2, 2, 1])
-                cols[0].markdown(f"**{item['nama']}**\n\nKategori: {item['kategori']}")
-                cols[1].write(f"Qty: {item['qty']}")
-                cols[2].write(f"Harga: Rp {item['harga']:,.0f}")
-                cols[3].write(f"Subtotal: Rp {item['subtotal']:,.0f}")
-
-                hapus_qty = cols[4].number_input(
-                    "🗑️", min_value=1, max_value=item['qty'], value=1, key=f"hapus_qty_{idx}"
-                )
-                if cols[4].button("❌", key=f"hapus_btn_{idx}"):
+                st.markdown("---")
+                cols = st.columns([3, 2, 2, 2, 2, 1])
+                cols[0].markdown(f"**{item['nama']}**\nKategori: {item['kategori']}")
+                cols[1].markdown(f"Qty: **{item['qty']}**")
+                cols[2].markdown(f"Harga: **Rp {item['harga']:,.0f}**")
+                cols[3].markdown(f"Subtotal: **Rp {item['subtotal']:,.0f}**")
+                hapus_qty = cols[4].number_input("Jumlah Hapus", min_value=1, max_value=item['qty'], value=1, key=f"hapus_qty_{idx}")
+                if cols[5].button("❌", key=f"hapus_btn_{idx}"):
                     if hapus_qty >= item['qty']:
                         st.session_state.keranjang.pop(idx)
                     else:
                         item['qty'] -= hapus_qty
                         item['subtotal'] = item['qty'] * item['harga']
                     st.experimental_rerun()
-
             total += item['subtotal']
 
         st.markdown("---")
@@ -205,7 +202,6 @@ def halaman_transaksi():
                 for b in barang:
                     if b["nama"] == item["nama"] and b["kategori"] == item["kategori"]:
                         b["stok"] -= item["qty"]
-
             transaksi.append({
                 "waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "kasir": st.session_state.login["username"],
