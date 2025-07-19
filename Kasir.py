@@ -5,7 +5,6 @@ import json
 import os
 import shutil
 from datetime import datetime
-import numpy as np
 import plotly.express as px
 import io
 
@@ -14,19 +13,6 @@ st.set_page_config(page_title="Aplikasi Kasir", layout="wide")
 AKUN_FILE = "akun.json"
 BARANG_FILE = "barang.json"
 TRANSAKSI_FILE = "transaksi.json"
-
-# ✅ Encoder aman untuk semua tipe data
-class JSONEncoderSafe(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        if isinstance(obj, (np.integer)):
-            return int(obj)
-        if isinstance(obj, (np.floating)):
-            return float(obj)
-        if isinstance(obj, (np.ndarray)):
-            return obj.tolist()
-        return super().default(obj)
 
 def backup_file(file):
     """Backup file corrupt ke *_backup_TIMESTAMP.json"""
@@ -40,7 +26,7 @@ def load_data(file, default=[]):
     """Load JSON, reset ke default jika kosong/corrupt"""
     if not os.path.exists(file):
         with open(file, "w", encoding="utf-8") as f:
-            json.dump(default, f, ensure_ascii=False, indent=2, cls=JSONEncoderSafe)
+            json.dump(default, f, ensure_ascii=False)
         return default
     try:
         with open(file, "r", encoding="utf-8") as f:
@@ -48,13 +34,13 @@ def load_data(file, default=[]):
     except json.JSONDecodeError:
         backup_file(file)
         with open(file, "w", encoding="utf-8") as f:
-            json.dump(default, f, ensure_ascii=False, indent=2, cls=JSONEncoderSafe)
+            json.dump(default, f, ensure_ascii=False)
         return default
 
 def simpan_data(file, data):
     """Simpan data ke JSON"""
     with open(file, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2, cls=JSONEncoderSafe)
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 def load_akun():
     return load_data(AKUN_FILE)
@@ -148,6 +134,7 @@ with tab2:
         st.warning("Belum ada barang di stok.")
     else:
         df_barang = pd.DataFrame(st.session_state.barang)
+
         if "keranjang" not in st.session_state:
             st.session_state.keranjang = []
 
@@ -231,6 +218,7 @@ with tab2:
                     st.text(struk.getvalue())
                     st.download_button("🖨️ Download Struk", data=struk.getvalue(), file_name="struk_toko_wawan.txt")
                     st.session_state.keranjang.clear()
+
 # 📋 Status Stok Barang
 with tab3:
     st.header("📋 Status Stok Barang")
@@ -255,26 +243,33 @@ with tab3:
                 with st.expander(f"{b['nama']} - {b['kategori']} (Stok: {b['stok']})"):
                     col1, col2 = st.columns([3, 1])
                     with col1:
-                        nama_baru = st.text_input("Nama", b["nama"], key=f"nama_{i}")
-                        kategori_baru = st.text_input("Kategori", b["kategori"], key=f"kat_{i}")
-                        modal_baru = st.number_input("Modal", value=b["harga_modal"], key=f"mod_{i}")
-                        jual_baru = st.number_input("Jual", value=b["harga_jual"], key=f"jual_{i}")
-                        stok_baru = st.number_input("Stok", value=b["stok"], key=f"stok_{i}", step=1)
-                    with col2:
-                        if st.button("💾 Edit", key=f"simpan_{i}"):
-                            b.update({
-                                "nama": nama_baru,
-                                "kategori": kategori_baru,
-                                "harga_modal": modal_baru,
-                                "harga_jual": jual_baru,
-                                "stok": stok_baru
-                            })
-                            simpan_data(BARANG_FILE, st.session_state.barang)
-                            st.success("Barang diperbarui.")
-                        if st.button("🗑️ Hapus", key=f"hapus_{i}"):
-                            if st.confirm(f"Yakin hapus '{b['nama']}'?"):
-                                st.session_state.barang.pop(i)
+                        mode = st.radio("Mode", ["Edit", "Hapus"], horizontal=True, key=f"mode_{i}")
+                        if mode == "Edit":
+                            nama_baru = st.text_input("Nama", b["nama"], key=f"nama_{i}")
+                            kategori_baru = st.text_input("Kategori", b["kategori"], key=f"kat_{i}")
+                            modal_baru = st.number_input("Modal", value=b["harga_modal"], key=f"mod_{i}")
+                            jual_baru = st.number_input("Jual", value=b["harga_jual"], key=f"jual_{i}")
+                            stok_baru = st.number_input("Stok", value=b["stok"], key=f"stok_{i}", step=1)
+                            if st.button("💾 Edit", key=f"simpan_{i}"):
+                                b.update({
+                                    "nama": nama_baru,
+                                    "kategori": kategori_baru,
+                                    "harga_modal": modal_baru,
+                                    "harga_jual": jual_baru,
+                                    "stok": stok_baru
+                                })
                                 simpan_data(BARANG_FILE, st.session_state.barang)
+                                st.success("Barang diperbarui.")
+                        else:  # Hapus mode
+                            st.text_input("Nama", b["nama"], disabled=True, key=f"hapus_nama_{i}")
+                            jumlah_hapus = st.number_input("Jumlah yang ingin dihapus", min_value=1, max_value=b["stok"], step=1, key=f"hapus_jml_{i}")
+                            if st.button("🗑️ Hapus Barang", key=f"hapus_{i}"):
+                                if jumlah_hapus == b["stok"]:
+                                    st.session_state.barang.pop(i)
+                                else:
+                                    b["stok"] -= jumlah_hapus
+                                simpan_data(BARANG_FILE, st.session_state.barang)
+                                st.success("Barang berhasil dihapus sebagian/seluruhnya.")
                                 st.rerun()
 
 # 🧾 Riwayat Transaksi
@@ -304,10 +299,8 @@ with tab5:
     else:
         tab_a, tab_b = st.tabs(["📈 Grafik", "📋 Tabel"])
         with tab_a:
-            penjualan = df.groupby("nama")["jumlah"].sum().reset_index()
-            keuntungan = df.groupby("nama")["keuntungan"].sum().reset_index()
-            fig1 = px.bar(penjualan, x="nama", y="jumlah", title="📈 Penjualan per Barang")
-            fig2 = px.pie(keuntungan, names="nama", values="keuntungan", title="💰 Kontribusi Keuntungan")
+            fig1 = px.bar(df.groupby("nama")["jumlah"].sum().reset_index(), x="nama", y="jumlah", title="Penjualan per Barang")
+            fig2 = px.pie(df, names="nama", values="keuntungan", title="Kontribusi Keuntungan")
             st.plotly_chart(fig1, use_container_width=True)
             st.plotly_chart(fig2, use_container_width=True)
         with tab_b:
@@ -319,9 +312,9 @@ with tab6:
     col1, col2 = st.columns(2)
     with col1:
         if st.session_state.barang:
-            df_barang = pd.DataFrame(st.session_state.barang)
-            st.download_button("⬇️ Unduh Data Barang", df_barang.to_csv(index=False), file_name="data_barang.csv")
+            df = pd.DataFrame(st.session_state.barang)
+            st.download_button("⬇️ Unduh Barang", df.to_csv(index=False), file_name="barang.csv")
     with col2:
         if st.session_state.transaksi:
-            df_transaksi = pd.DataFrame(st.session_state.transaksi)
-            st.download_button("⬇️ Unduh Data Transaksi", df_transaksi.to_csv(index=False), file_name="data_transaksi.csv")
+            df = pd.DataFrame(st.session_state.transaksi)
+            st.download_button("⬇️ Unduh Transaksi", df.to_csv(index=False), file_name="transaksi.csv")
