@@ -290,88 +290,56 @@ def halaman_riwayat():
 
         st.dataframe(df_hapus_filtered)
 # Laporan
-
 def halaman_laporan():
-    import plotly.express as px
-    from io import BytesIO
-    from fpdf import FPDF
-
     st.subheader("📈 Laporan Keuangan")
     data = load_data(TRANSAKSI_FILE)
+    
     if not data:
-        st.info("Belum ada data.")
+        st.info("Belum ada data transaksi.")
         return
 
     df = pd.DataFrame(data)
     df['waktu'] = pd.to_datetime(df['waktu'])
     df['tanggal'] = df['waktu'].dt.date
-    df['bulan'] = df['waktu'].dt.to_period('M')
+    df['bulan'] = df['waktu'].dt.strftime('%Y-%m')  # Format: Tahun-Bulan
 
-    # 🔍 Filter tanggal laporan
-    tanggal_min = df['tanggal'].min()
-    tanggal_max = df['tanggal'].max()
+    # Filter Tanggal
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Tanggal Mulai", tanggal_min, key="laporan_mulai")
+        start_date = st.date_input("Tanggal Mulai", df['tanggal'].min())
     with col2:
-        end_date = st.date_input("Tanggal Akhir", tanggal_max, key="laporan_akhir")
+        end_date = st.date_input("Tanggal Akhir", df['tanggal'].max())
 
-    if start_date > end_date:
-        st.warning("Tanggal mulai tidak boleh setelah tanggal akhir.")
-        return
+    df_filtered = df[(df['tanggal'] >= start_date) & (df['tanggal'] <= end_date)]
 
-    # Filter kasir
-    kasir_list = df['kasir'].unique().tolist()
-    selected_kasir = st.selectbox("Filter Kasir", ["Semua"] + kasir_list)
-    df = df[(df['tanggal'] >= start_date) & (df['tanggal'] <= end_date)]
-    if selected_kasir != "Semua":
-        df = df[df['kasir'] == selected_kasir]
+    # Ringkasan Pendapatan (Card)
+    st.write("### 📊 Ringkasan Pendapatan")
+    total_pendapatan = df_filtered['total'].sum()
+    rata_perhari = df_filtered.groupby('tanggal')['total'].sum().mean() if not df_filtered.empty else 0
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Pendapatan", f"Rp {total_pendapatan:,.0f}")
+    col2.metric("Rata-rata per Hari", f"Rp {rata_perhari:,.0f}")
+    col3.metric("Jumlah Transaksi", len(df_filtered))
 
-    st.write("### 📅 Pendapatan Harian")
-    harian = df.groupby("tanggal")["total"].sum().reset_index()
-    fig_harian = px.line(harian, x="tanggal", y="total", title="Pendapatan Harian")
-    st.plotly_chart(fig_harian)
+    # Pendapatan per Kasir (Tabel)
+    st.write("### 🧑‍💼 Pendapatan per Kasir")
+    kasir_df = df_filtered.groupby('kasir')['total'].agg(['sum', 'count']).reset_index()
+    kasir_df.columns = ['Kasir', 'Total Pendapatan', 'Jumlah Transaksi']
+    st.dataframe(kasir_df, hide_index=True)
 
-    st.write("### 📆 Pendapatan Bulanan")
-    bulanan = df.groupby("bulan")["total"].sum().reset_index()
-    fig_bulanan = px.bar(bulanan, x="bulan", y="total", title="Pendapatan Bulanan")
-    st.plotly_chart(fig_bulanan)
-
-    st.write("### 📊 Rata-rata Harian & Total")
-    total_pendapatan = df['total'].sum()
-    rata_harian = harian['total'].mean() if not harian.empty else 0
-    st.metric("Total Pendapatan", f"Rp {total_pendapatan:,.0f}")
-    st.metric("Rata-rata/Hari", f"Rp {rata_harian:,.0f}")
-
-    # Ekspor ke Excel
-    if st.button("📤 Ekspor Excel"):
-        out_df = df[["waktu", "kasir", "total"]]
-        out_df.to_excel("laporan_penjualan.xlsx", index=False)
-        with open("laporan_penjualan.xlsx", "rb") as f:
-            st.download_button("Download Excel", f, "laporan_penjualan.xlsx")
-
-    # Ekspor PDF
-    if st.button("📄 Ekspor PDF"):
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt="Laporan Keuangan", ln=True, align='C')
-
-        for index, row in df.iterrows():
-            pdf.cell(200, 10, txt=f"{row['waktu']} - {row['kasir']} - Rp{row['total']:,.0f}", ln=True)
-
-        pdf_output = BytesIO()
-        pdf.output(pdf_output)
-        st.download_button("Download PDF", pdf_output.getvalue(), "laporan_penjualan.pdf")
-
+    # Export Laporan
+    if st.button("💾 Ekspor ke Excel"):
+        with pd.ExcelWriter("laporan_penjualan.xlsx") as writer:
+            df_filtered.to_excel(writer, sheet_name="Transaksi", index=False)
+            kasir_df.to_excel(writer, sheet_name="Kasir", index=False)
+        st.success("Laporan berhasil di-generate!")
 # Statistik
 
 def halaman_statistik():
-    import plotly.express as px
-    from collections import Counter
-
     st.subheader("📊 Statistik Penjualan")
     data = load_data(TRANSAKSI_FILE)
+    
     if not data:
         st.info("Belum ada data transaksi.")
         return
@@ -380,80 +348,62 @@ def halaman_statistik():
     df['waktu'] = pd.to_datetime(df['waktu'])
     df['tanggal'] = df['waktu'].dt.date
 
-    # 🔍 Filter rentang tanggal
-    tanggal_min = df['tanggal'].min()
-    tanggal_max = df['tanggal'].max()
+    # Filter Tanggal
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Tanggal Mulai", tanggal_min, key="statistik_mulai")
+        start_date = st.date_input("Tanggal Mulai", df['tanggal'].min(), key="stat_start")
     with col2:
-        end_date = st.date_input("Tanggal Akhir", tanggal_max, key="statistik_akhir")
-
-    if start_date > end_date:
-        st.warning("Tanggal mulai tidak boleh setelah tanggal akhir.")
-        return
+        end_date = st.date_input("Tanggal Akhir", df['tanggal'].max(), key="stat_end")
 
     df = df[(df['tanggal'] >= start_date) & (df['tanggal'] <= end_date)]
-    data = df.to_dict(orient="records")
 
+    # Grafik Pendapatan Harian (Pastikan selalu muncul)
+    st.write("### 📈 Pendapatan Harian")
+    if not df.empty:
+        daily_income = df.groupby('tanggal')['total'].sum().reset_index()
+        fig1 = px.line(
+            daily_income, 
+            x='tanggal', 
+            y='total', 
+            title="Pendapatan per Hari",
+            labels={'total': 'Pendapatan (Rp)', 'tanggal': 'Tanggal'}
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+    else:
+        st.warning("Tidak ada data di rentang tanggal ini.")
+
+    # Grafik Barang Terlaris (Wajib muncul)
+    st.write("### 🏆 Barang Terlaris")
     all_items = []
-    for t in data:
-        for item in t['items']:
+    for transaction in data:
+        for item in transaction['items']:
             all_items.append(item['nama'])
-
-    st.write("### 📦 Barang Terlaris")
+    
     if all_items:
-        counter = Counter(all_items)
-        terlaris_df = pd.DataFrame(counter.items(), columns=["Barang", "Jumlah Terjual"]).sort_values(by="Jumlah Terjual", ascending=False)
-        st.dataframe(terlaris_df)
-        fig_terlaris = px.bar(terlaris_df, x="Barang", y="Jumlah Terjual", title="Barang Terlaris")
-        st.plotly_chart(fig_terlaris)
+        item_counts = pd.Series(all_items).value_counts().reset_index()
+        item_counts.columns = ['Barang', 'Jumlah Terjual']
+        fig2 = px.bar(
+            item_counts.head(10), 
+            x='Barang', 
+            y='Jumlah Terjual',
+            title="Top 10 Barang Terlaris"
+        )
+        st.plotly_chart(fig2, use_container_width=True)
     else:
-        st.info("Tidak ada barang terjual di rentang tanggal ini.")
+        st.warning("Belum ada barang yang terjual.")
 
-    st.write("### 💰 Pendapatan Harian")
+    # Grafik Metode Pembayaran
+    st.write("### 💳 Metode Pembayaran")
     if not df.empty:
-        pendapatan_harian = df.groupby("tanggal")["total"].sum().reset_index().sort_values(by="tanggal")
-        pendapatan_harian = pendapatan_harian.rename(columns={"total": "Pendapatan"})
-        st.dataframe(pendapatan_harian)
-        fig_pendapatan = px.line(pendapatan_harian, x="tanggal", y="Pendapatan", title="Pendapatan Harian")
-        st.plotly_chart(fig_pendapatan)
-    else:
-        st.info("Tidak ada transaksi untuk ditampilkan pada grafik pendapatan.")
-
-    st.write("### 📈 Laba Kotor Harian")
-    laba_dict = {}
-    for t in data:
-        tgl = pd.to_datetime(t["waktu"]).date()
-        laba_hari = 0
-        for item in t["items"]:
-            harga_modal = item.get("harga_modal")
-            if harga_modal is not None:
-                laba_hari += (item["harga"] - harga_modal) * item["qty"]
-        laba_dict[tgl] = laba_dict.get(tgl, 0) + laba_hari
-
-    if laba_dict:
-        laba_df = pd.DataFrame(list(laba_dict.items()), columns=["Tanggal", "Laba Kotor"])
-        laba_df = laba_df.sort_values(by="Tanggal")
-        st.dataframe(laba_df)
-        fig_laba = px.line(laba_df, x="Tanggal", y="Laba Kotor", title="Laba Kotor Harian")
-        st.plotly_chart(fig_laba)
-    else:
-        st.info("Tidak ada data laba kotor untuk ditampilkan.")
-
-    st.write("### 🧾 Rata-rata Transaksi per Hari")
-    rata_df = df.groupby("tanggal").size().reset_index(name="Jumlah Transaksi")
-    rata_rata = rata_df["Jumlah Transaksi"].mean() if not rata_df.empty else 0
-    st.metric("Rata-rata Transaksi/Hari", f"{rata_rata:.2f}")
-
-    st.write("### 🧍 Performa Kasir")
-    if not df.empty:
-        kasir_df = df.groupby("kasir")["total"].agg(["count", "sum"]).reset_index().rename(columns={"count": "Jumlah Transaksi", "sum": "Total Penjualan"})
-        st.dataframe(kasir_df)
-        fig_kasir = px.bar(kasir_df, x="kasir", y="Total Penjualan", title="Performa Kasir")
-        st.plotly_chart(fig_kasir)
-    else:
-        st.info("Tidak ada data kasir di rentang tanggal ini.")
+        payment_df = df['metode'].value_counts().reset_index()
+        payment_df.columns = ['Metode', 'Jumlah']
+        fig3 = px.pie(
+            payment_df, 
+            names='Metode', 
+            values='Jumlah',
+            title="Persebaran Metode Pembayaran"
+        )
+        st.plotly_chart(fig3, use_container_width=True)
 # Akun
 
 def halaman_akun():
