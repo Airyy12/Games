@@ -25,16 +25,16 @@ def backup_file(file):
 def load_data(file, default=[]):
     """Load JSON, reset ke default jika kosong/corrupt"""
     if not os.path.exists(file):
-        with open(file, "w", encoding="utf-8") as f:
-            json.dump(default, f, ensure_ascii=False)
+        with open(file, "w") as f:
+            json.dump(default, f)
         return default
     try:
-        with open(file, "r", encoding="utf-8") as f:
+        with open(file, "r") as f:
             return json.load(f)
     except json.JSONDecodeError:
         backup_file(file)
-        with open(file, "w", encoding="utf-8") as f:
-            json.dump(default, f, ensure_ascii=False)
+        with open(file, "w") as f:
+            json.dump(default, f)
         return default
 
 def simpan_data(file, data):
@@ -130,6 +130,7 @@ with tab1:
 # 🛒 Transaksi Kasir
 with tab2:
     st.header("🛒 Transaksi Kasir")
+
     if not st.session_state.barang:
         st.warning("Belum ada barang di stok.")
     else:
