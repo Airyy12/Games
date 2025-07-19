@@ -135,6 +135,7 @@ with tab1:
 # 🛒 Transaksi Kasir
 with tab2:
     st.header("🛒 Transaksi Kasir")
+
     if not st.session_state.barang:
         st.warning("Belum ada barang di stok.")
     else:
@@ -149,17 +150,22 @@ with tab2:
         if not df_filtered.empty:
             barang_pilih = st.selectbox("Pilih Barang", df_filtered["nama"])
             barang_data = df_filtered[df_filtered["nama"] == barang_pilih].iloc[0]
-            jumlah_beli = st.number_input(f"Jumlah '{barang_pilih}'", min_value=1, max_value=int(barang_data["stok"]), step=1)
 
-            if st.button("🛒 Tambah ke Keranjang"):
-                st.session_state.keranjang.append({
-                    "nama": barang_pilih,
-                    "kategori": barang_data["kategori"],
-                    "jumlah": jumlah_beli,
-                    "harga_satuan": barang_data["harga_jual"],
-                    "subtotal": jumlah_beli * barang_data["harga_jual"]
-                })
-                st.success(f"{jumlah_beli} {barang_pilih} ditambahkan ke keranjang.")
+            if barang_data["stok"] <= 0:
+                st.warning(f"⚠️ Stok '{barang_pilih}' habis. Tidak bisa dibeli.")
+            else:
+                jumlah_beli = st.number_input(
+                    f"Jumlah '{barang_pilih}'", min_value=1, max_value=int(barang_data["stok"]), step=1
+                )
+                if st.button("🛒 Tambah ke Keranjang"):
+                    st.session_state.keranjang.append({
+                        "nama": barang_pilih,
+                        "kategori": barang_data["kategori"],
+                        "jumlah": jumlah_beli,
+                        "harga_satuan": barang_data["harga_jual"],
+                        "subtotal": jumlah_beli * barang_data["harga_jual"]
+                    })
+                    st.success(f"{jumlah_beli} {barang_pilih} ditambahkan ke keranjang.")
 
         if st.session_state.keranjang:
             st.subheader("📝 Keranjang Belanja")
@@ -180,6 +186,18 @@ with tab2:
             uang_bayar = st.number_input("💵 Uang Diterima", min_value=0, step=1000)
 
             if st.button("✅ Proses Transaksi"):
+                # Cek apakah semua item cukup stok
+                stok_cukup = True
+                for item in st.session_state.keranjang:
+                    stok_barang = next((b["stok"] for b in st.session_state.barang if b["nama"] == item["nama"]), 0)
+                    if item["jumlah"] > stok_barang:
+                        stok_cukup = False
+                        st.error(f"❌ Stok '{item['nama']}' tidak cukup. Hanya tersedia {stok_barang}.")
+                        break
+
+                if not stok_cukup:
+                    st.stop()
+
                 if uang_bayar < total_bayar:
                     st.error("Uang tidak cukup.")
                 else:
@@ -223,6 +241,7 @@ with tab2:
                     st.text(struk.getvalue())
                     st.download_button("🖨️ Download Struk", data=struk.getvalue(), file_name="struk_toko_wawan.txt")
                     st.session_state.keranjang.clear()
+
 
 # 📋 Status Stok Barang
 with tab3:
