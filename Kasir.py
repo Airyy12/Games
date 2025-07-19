@@ -15,7 +15,6 @@ BARANG_FILE = "barang.json"
 TRANSAKSI_FILE = "transaksi.json"
 
 def backup_file(file):
-    """Backup file corrupt ke *_backup_TIMESTAMP.json"""
     if os.path.exists(file):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"{file}_backup_{timestamp}"
@@ -23,7 +22,6 @@ def backup_file(file):
         st.warning(f"⚠️ File {file} corrupt! Dibackup ke {backup_name}")
 
 def load_data(file, default=[]):
-    """Load JSON, reset ke default jika kosong/corrupt"""
     if not os.path.exists(file):
         with open(file, "w", encoding="utf-8") as f:
             json.dump(default, f, ensure_ascii=False)
@@ -38,12 +36,10 @@ def load_data(file, default=[]):
         return default
 
 def simpan_data(file, data):
-    """Simpan data ke JSON, konversi objek tidak serializable seperti datetime ke string"""
     def convert(obj):
         if isinstance(obj, datetime):
             return obj.strftime('%Y-%m-%d %H:%M:%S')
-        return str(obj)  # fallback untuk objek lainnya
-
+        return str(obj)
     with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False, default=convert)
 
@@ -56,7 +52,6 @@ def simpan_akun(data):
 def tampilkan_login():
     st.title("🔒 Login Kasir")
     tab1, tab2 = st.tabs(["🔑 Login", "📝 Buat Akun Baru"])
-
     with tab1:
         data = load_akun()
         username = st.text_input("Username")
@@ -71,7 +66,6 @@ def tampilkan_login():
                 st.rerun()
             else:
                 st.error("Login gagal. Periksa username/password/role.")
-
     with tab2:
         new_user = st.text_input("Username Baru")
         new_pass = st.text_input("Password Baru", type="password")
@@ -91,7 +85,6 @@ if not st.session_state.login:
     tampilkan_login()
     st.stop()
 
-# Load data
 st.session_state.barang = load_data(BARANG_FILE)
 st.session_state.transaksi = load_data(TRANSAKSI_FILE)
 
@@ -101,10 +94,10 @@ if st.sidebar.button("🔓 Logout"):
     st.session_state.clear()
     st.rerun()
 
-menu = ["📦 Input Barang", "🛒 Kasir", "📋 Stok", "🧾 Riwayat", "📊 Dashboard", "📤 Ekspor"]
+menu = ["📦 Input Barang", "🛒 Kasir", "📋 Stok", "🧾 Riwayat", "📊 Dashboard", "📄 Ekspor"]
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(menu)
 
-# 📦 Input Barang
+# Input Barang
 with tab1:
     st.header("📦 Input Barang")
     if st.session_state.role != "admin":
@@ -116,21 +109,15 @@ with tab1:
             modal = st.number_input("Harga Modal", min_value=0)
             jual = st.number_input("Harga Jual", min_value=0)
             stok = st.number_input("Stok Awal", min_value=0, step=1)
-            simpan = st.form_submit_button("💾 Simpan Barang")
+            simpan = st.form_submit_button("📅 Simpan Barang")
             if simpan and nama and kategori:
-                barang_sama = next(
-                    (b for b in st.session_state.barang 
-                     if b["nama"].lower() == nama.lower() and b["kategori"].lower() == kategori.lower()),
-                    None
-                )
+                barang_sama = next((b for b in st.session_state.barang if b["nama"].lower() == nama.lower() and b["kategori"].lower() == kategori.lower()), None)
                 if barang_sama:
-                    # Update stok dan harga
                     barang_sama["stok"] += stok
-                    barang_sama["harga_modal"] = modal  # opsional, update jika mau
-                    barang_sama["harga_jual"] = jual    # opsional
+                    barang_sama["harga_modal"] = modal
+                    barang_sama["harga_jual"] = jual
                     st.success(f"Barang '{nama}' di kategori '{kategori}' diperbarui (stok ditambah).")
                 else:
-                    # Tambah barang baru
                     st.session_state.barang.append({
                         "nama": nama,
                         "kategori": kategori,
@@ -144,31 +131,24 @@ with tab1:
         if st.session_state.barang:
             st.dataframe(pd.DataFrame(st.session_state.barang))
 
-# 🛒 Transaksi Kasir
+# Transaksi Kasir
 with tab2:
     st.header("🛒 Transaksi Kasir")
-
     if not st.session_state.barang:
         st.warning("Belum ada barang di stok.")
     else:
         df_barang = pd.DataFrame(st.session_state.barang)
-
         if "keranjang" not in st.session_state:
             st.session_state.keranjang = []
-
         cari_barang = st.text_input("🔍 Cari Barang")
         df_filtered = df_barang[df_barang["nama"].str.contains(cari_barang, case=False)] if cari_barang else df_barang
-
         if not df_filtered.empty:
             barang_pilih = st.selectbox("Pilih Barang", df_filtered["nama"])
             barang_data = df_filtered[df_filtered["nama"] == barang_pilih].iloc[0]
-
             if barang_data["stok"] <= 0:
-                st.warning(f"⚠️ Stok '{barang_pilih}' habis. Tidak bisa dibeli.")
+                st.warning(f"⚠️ Stok '{barang_pilih}' habis.")
             else:
-                jumlah_beli = st.number_input(
-                    f"Jumlah '{barang_pilih}'", min_value=1, max_value=int(barang_data["stok"]), step=1
-                )
+                jumlah_beli = st.number_input(f"Jumlah '{barang_pilih}'", min_value=1, max_value=int(barang_data["stok"]), step=1)
                 if st.button("🛒 Tambah ke Keranjang"):
                     st.session_state.keranjang.append({
                         "nama": barang_pilih,
@@ -178,7 +158,6 @@ with tab2:
                         "subtotal": jumlah_beli * barang_data["harga_jual"]
                     })
                     st.success(f"{jumlah_beli} {barang_pilih} ditambahkan ke keranjang.")
-
         if st.session_state.keranjang:
             st.subheader("📝 Keranjang Belanja")
             for i, item in enumerate(st.session_state.keranjang):
@@ -191,14 +170,19 @@ with tab2:
                 if col6.button("❌", key=f"hapus_cart_{i}"):
                     st.session_state.keranjang.pop(i)
                     st.rerun()
-
             total_bayar = sum(item["subtotal"] for item in st.session_state.keranjang)
-            st.markdown(f"## 💵 Total Bayar: Rp {total_bayar:,}")
-
             uang_bayar = st.number_input("💵 Uang Diterima", min_value=0, step=1000)
-
+            st.subheader("🎁 Diskon")
+            diskon_jenis = st.radio("Pilih Jenis Diskon", ["Rp", "%"], horizontal=True)
+            diskon_input = st.number_input("Nilai Diskon", min_value=0)
+            if diskon_jenis == "%":
+                diskon_rp = total_bayar * (diskon_input / 100)
+            else:
+                diskon_rp = diskon_input
+            diskon_rp = min(diskon_rp, total_bayar)
+            total_akhir = total_bayar - diskon_rp
+            st.markdown(f"### 💰 Total Setelah Diskon: Rp {total_akhir:,.0f}")
             if st.button("✅ Proses Transaksi"):
-                # Cek apakah semua item cukup stok
                 stok_cukup = True
                 for item in st.session_state.keranjang:
                     stok_barang = next((b["stok"] for b in st.session_state.barang if b["nama"] == item["nama"]), 0)
@@ -206,16 +190,13 @@ with tab2:
                         stok_cukup = False
                         st.error(f"❌ Stok '{item['nama']}' tidak cukup. Hanya tersedia {stok_barang}.")
                         break
-
                 if not stok_cukup:
                     st.stop()
-
-                if uang_bayar < total_bayar:
+                if uang_bayar < total_akhir:
                     st.error("Uang tidak cukup.")
                 else:
-                    kembalian = uang_bayar - total_bayar
+                    kembalian = uang_bayar - total_akhir
                     waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
                     for item in st.session_state.keranjang:
                         for b in st.session_state.barang:
                             if b["nama"] == item["nama"]:
@@ -231,10 +212,8 @@ with tab2:
                                     "keuntungan": keuntungan,
                                     "user": st.session_state.user
                                 })
-
                     simpan_data(BARANG_FILE, st.session_state.barang)
                     simpan_data(TRANSAKSI_FILE, st.session_state.transaksi)
-
                     struk = io.StringIO()
                     struk.write("TOKO WAWAN\nJl. Contoh No. 1, Telp. 0812-XXXX-XXXX\n")
                     struk.write("="*32 + "\n")
@@ -245,15 +224,15 @@ with tab2:
                         struk.write(f"       Rp {item['subtotal']:,}\n")
                     struk.write("-"*32 + "\n")
                     struk.write(f"Subtotal : Rp {total_bayar:,}\n")
+                    struk.write(f"Diskon   : Rp {diskon_rp:,.0f}\n")
+                    struk.write(f"Total    : Rp {total_akhir:,.0f}\n")
                     struk.write(f"Bayar    : Rp {uang_bayar:,}\n")
-                    struk.write(f"Kembalian: Rp {kembalian:,}\n")
+                    struk.write(f"Kembalian: Rp {kembalian:,.0f}\n")
                     struk.write("="*32 + "\nTerima kasih atas kunjungan Anda\n")
-
                     st.success("✅ Transaksi berhasil.")
                     st.text(struk.getvalue())
                     st.download_button("🖨️ Download Struk", data=struk.getvalue(), file_name="struk_toko_wawan.txt")
                     st.session_state.keranjang.clear()
-
 
 # 📋 Status Stok Barang
 with tab3:
