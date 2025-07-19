@@ -424,3 +424,8 @@ with st.sidebar:
 menu_label = pilihan.split(" ", 1)[1]
 st.title("Aplikasi Kasir")
 menu[menu_label]()
+
+
+menu_label = pilihan.split(" ", 1)[1]
+st.title("Aplikasi Kasir")
+menu[menu_label]()
