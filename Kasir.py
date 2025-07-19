@@ -10,6 +10,7 @@ import qrcode
 from PIL import Image
 import io
 import plotly.express as px
+import base64
 
 # Konfigurasi
 st.set_page_config(page_title="Aplikasi Kasir", layout="wide")
@@ -36,6 +37,11 @@ def hash_password(password):
 def check_password(password, hashed):
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
+def image_to_base64(image):
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
 # Setup admin awal
 def setup_admin():
     akun = load_data(AKUN_FILE)
@@ -49,7 +55,10 @@ def setup_admin():
                 akun.append({
                     "username": username,
                     "password": hash_password(password),
-                    "role": "admin"
+                    "role": "admin",
+                    "nama_lengkap": "",
+                    "no_telepon": "",
+                    "foto_profil": None
                 })
                 save_data(AKUN_FILE, akun)
                 st.success("Admin berhasil dibuat! Silakan login.")
@@ -64,7 +73,10 @@ def login():
     if st.button("Login"):
         for a in akun:
             if a["username"] == username and check_password(password, a["password"]):
-                st.session_state.login = {"username": username, "role": a["role"]}
+                st.session_state.login = {
+                    "username": username,
+                    "role": a["role"]
+                }
                 st.success("Login berhasil!")
                 st.rerun()
         st.error("Username atau password salah.")
@@ -391,35 +403,194 @@ def halaman_statistik():
     else:
         st.warning("Belum ada barang yang terjual.")
 
-def halaman_akun():
-    st.subheader("👤 Manajemen Akun")
-    akun = load_data(AKUN_FILE)
+def halaman_profil(username=None):
+    # Default ke user yang login jika tidak ada parameter
+    target_user = username if username else st.session_state.login["username"]
+    is_admin = st.session_state.login["role"] == "admin"
+    is_own_profile = target_user == st.session_state.login["username"]
     
-    # Form tambah akun baru
-    with st.expander("➕ Tambah Akun Baru"):
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        role = st.selectbox("Role", ["admin", "kasir"])
-        if st.button("Simpan Akun"):
-            if any(a["username"] == username for a in akun):
-                st.error("Username sudah digunakan!")
-            else:
-                akun.append({
-                    "username": username,
-                    "password": hash_password(password),
-                    "role": role
-                })
-                save_data(AKUN_FILE, akun)
-                st.success("Akun berhasil ditambahkan!")
-                st.rerun()
+    st.subheader(f"👤 Profil {target_user}")
+    akun = load_data(AKUN_FILE)
+    user_data = next((a for a in akun if a["username"] == target_user), None)
 
-    # Tabel daftar akun
-    st.write("### Daftar Akun")
-    if akun:
-        df = pd.DataFrame(akun).drop(columns=["password"])
-        st.dataframe(df, hide_index=True)
-    else:
+    if not user_data:
+        st.error("Data pengguna tidak ditemukan")
+        return
+
+    # Inisialisasi data jika kosong
+    user_data.setdefault("nama_lengkap", "")
+    user_data.setdefault("no_telepon", "")
+    user_data.setdefault("foto_profil", None)
+
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        st.write("### Foto Profil")
+        if user_data["foto_profil"]:
+            try:
+                # Decode base64 image
+                image_data = base64.b64decode(user_data["foto_profil"])
+                image = Image.open(io.BytesIO(image_data))
+                st.image(image, width=150)
+            except:
+                st.warning("Gagal memuat foto profil")
+        
+        if is_own_profile:
+            uploaded_file = st.file_uploader("Ubah foto profil", type=["jpg", "png", "jpeg"], key=f"upload_{target_user}")
+            if uploaded_file is not None:
+                try:
+                    image = Image.open(uploaded_file)
+                    # Resize image to max 300px width
+                    width, height = image.size
+                    if width > 300:
+                        ratio = 300 / width
+                        image = image.resize((300, int(height * ratio)))
+                    
+                    # Convert to base64
+                    user_data["foto_profil"] = image_to_base64(image)
+                    save_data(AKUN_FILE, akun)
+                    st.success("Foto profil berhasil diperbarui!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Gagal memproses gambar: {str(e)}")
+            
+            if user_data["foto_profil"] and st.button("Hapus Foto Profil", key=f"delete_{target_user}"):
+                user_data["foto_profil"] = None
+                save_data(AKUN_FILE, akun)
+                st.success("Foto profil dihapus!")
+                st.rerun()
+    
+    with col2:
+        st.write("### Informasi Pengguna")
+        st.text_input("Username", value=user_data["username"], disabled=True)
+        
+        # Hanya admin atau pemilik profil yang bisa edit
+        if is_admin or is_own_profile:
+            nama_lengkap = st.text_input("Nama Lengkap", value=user_data["nama_lengkap"], 
+                                       disabled=not (is_admin or is_own_profile))
+            no_telepon = st.text_input("Nomor Telepon", value=user_data["no_telepon"], 
+                                     disabled=not is_admin)  # Hanya admin yang bisa edit no telepon
+            
+            if st.button("Simpan Perubahan", key=f"save_{target_user}"):
+                user_data["nama_lengkap"] = nama_lengkap
+                user_data["no_telepon"] = no_telepon
+                save_data(AKUN_FILE, akun)
+                st.success("Profil berhasil diperbarui!")
+        else:
+            st.text_input("Nama Lengkap", value=user_data["nama_lengkap"], disabled=True)
+            st.text_input("Nomor Telepon", value=user_data["no_telepon"], disabled=True)
+        
+        st.text_input("Role", value=user_data["role"], disabled=True)
+    
+    st.markdown("---")
+    st.write("### 📊 Statistik Performa")
+    
+    # Load transaction data
+    try:
+        transaksi = load_data(TRANSAKSI_FILE)
+        if not transaksi:
+            st.info("Belum ada data transaksi.")
+            return
+    except Exception as e:
+        st.error(f"Gagal memuat data: {str(e)}")
+        return
+
+    # Konversi ke DataFrame
+    try:
+        df = pd.DataFrame(transaksi)
+        df['waktu'] = pd.to_datetime(df['waktu'])
+        df['tanggal'] = df['waktu'].dt.date
+        df['bulan'] = df['waktu'].dt.strftime('%Y-%m')
+    except Exception as e:
+        st.error(f"Error memproses data: {str(e)}")
+        return
+
+    # Filter hanya transaksi pengguna saat ini
+    transaksi_saya = df[df['kasir'] == target_user]
+    
+    if transaksi_saya.empty:
+        st.info("Pengguna ini belum melakukan transaksi.")
+        return
+    
+    # 1. Statistik Dasar
+    st.write("#### 📌 Ringkasan")
+    total_transaksi = len(transaksi_saya)
+    total_pendapatan = transaksi_saya['total'].sum()
+    rata_transaksi = transaksi_saya['total'].mean()
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Transaksi", total_transaksi)
+    col2.metric("Total Pendapatan", f"Rp {total_pendapatan:,.0f}")
+    col3.metric("Rata-rata/Transaksi", f"Rp {rata_transaksi:,.0f}")
+
+    # 2. Grafik Performa Bulanan
+    st.write("### 📈 Grafik Performa")
+    try:
+        bulanan = transaksi_saya.groupby('bulan').agg({
+            'total': 'sum',
+            'waktu': 'count'
+        }).rename(columns={'total': 'Pendapatan', 'waktu': 'Jumlah Transaksi'})
+        
+        fig = px.bar(
+            bulanan,
+            x=bulanan.index,
+            y='Pendapatan',
+            title='Pendapatan Bulanan',
+            labels={'bulan': 'Bulan', 'Pendapatan': 'Total Pendapatan (Rp)'},
+            text_auto='.2s',
+            color='Jumlah Transaksi',
+            color_continuous_scale='blues'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"Gagal membuat grafik: {str(e)}")
+
+def halaman_akun():
+    st.subheader("👥 Manajemen Pengguna")
+    
+    akun = load_data(AKUN_FILE)
+    current_user = st.session_state.login["username"]
+    
+    # Hanya admin yang bisa menambah akun baru
+    if st.session_state.login["role"] == "admin":
+        with st.expander("➕ Tambah Akun Baru", expanded=False):
+            with st.form("form_akun_baru"):
+                username = st.text_input("Username")
+                password = st.text_input("Password", type="password")
+                role = st.selectbox("Role", ["admin", "kasir"])
+                
+                if st.form_submit_button("Buat Akun"):
+                    if any(a["username"] == username for a in akun):
+                        st.error("Username sudah digunakan!")
+                    else:
+                        akun.append({
+                            "username": username,
+                            "password": hash_password(password),
+                            "role": role,
+                            "nama_lengkap": "",
+                            "no_telepon": "",
+                            "foto_profil": None
+                        })
+                        save_data(AKUN_FILE, akun)
+                        st.success("Akun berhasil dibuat!")
+                        st.rerun()
+    
+    st.write("### Daftar Pengguna")
+    if not akun:
         st.info("Belum ada akun terdaftar")
+        return
+    
+    # Tampilkan daftar pengguna tanpa password
+    df = pd.DataFrame(akun).drop(columns=["password"])
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    
+    # Pilih pengguna untuk dilihat/diedit
+    st.write("### Edit Profil Pengguna")
+    user_list = [a["username"] for a in akun]
+    selected_user = st.selectbox("Pilih Pengguna", user_list)
+    
+    if selected_user:
+        halaman_profil(username=selected_user)
 
 # ========== MAIN ==========
 setup_admin()
@@ -434,7 +605,8 @@ menu = {
     "Transaksi": halaman_transaksi,
     "Riwayat": halaman_riwayat,
     "Laporan": halaman_laporan,
-    "Statistik": halaman_statistik
+    "Statistik": halaman_statistik,
+    "Profil Saya": halaman_profil
 }
 
 if st.session_state["login"]["role"] == "admin":
@@ -468,15 +640,22 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     menu_icon = {
-        "Dashboard": "\U0001F3E0",
-        "Barang": "\U0001F4E6",
-        "Transaksi": "\U0001F6D2",
-        "Riwayat": "\U0001F4DC",
-        "Laporan": "\U0001F4C8",
-        "Statistik": "\U0001F4CA",
-        "Manajemen Akun": "\U0001F465"
+        "Dashboard": "📊",
+        "Barang": "📦",
+        "Transaksi": "🛒",
+        "Riwayat": "📜",
+        "Laporan": "📈",
+        "Statistik": "📊",
+        "Profil Saya": "👤",
+        "Manajemen Akun": "👥"
     }
-    pilihan = st.radio("\U0001F4CC Menu", [f"{menu_icon[m]} {m}" for m in menu.keys()])
+    
+    # Hanya tampilkan menu yang sesuai dengan role
+    available_menus = list(menu.keys())
+    if st.session_state["login"]["role"] != "admin":
+        available_menus.remove("Manajemen Akun")
+    
+    pilihan = st.radio("\U0001F4CC Menu", [f"{menu_icon[m]} {m}" for m in available_menus])
 
     st.markdown("<hr>", unsafe_allow_html=True)
     if st.button("\U0001F513 Logout"):
