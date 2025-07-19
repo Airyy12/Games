@@ -6,3 +6,4 @@ fpdf
 qrcode
 pillow
 bcrypt
+xlsxwriter
