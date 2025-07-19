@@ -158,7 +158,8 @@ def halaman_transaksi():
         st.session_state.keranjang = []
 
     if st.button("➕ Tambah ke Keranjang"):
-        existing = next((item for item in st.session_state.keranjang if item['nama'] == b_dipilih['nama'] and item['kategori'] == b_dipilih['kategori']), None)
+        existing = next((item for item in st.session_state.keranjang
+                         if item['nama'] == b_dipilih['nama'] and item['kategori'] == b_dipilih['kategori']), None)
         if existing:
             existing['qty'] += qty
             existing['subtotal'] = existing['qty'] * existing['harga']
@@ -172,7 +173,7 @@ def halaman_transaksi():
                 "subtotal": b_dipilih['harga'] * qty
             })
 
-    if st.session_state.keranjang:
+    if st.session_state.get("keranjang"):
         st.write("### 🧺 Keranjang Belanja")
         total = 0
         for idx, item in enumerate(st.session_state.keranjang):
@@ -210,11 +211,13 @@ def halaman_transaksi():
 
         if metode == "QRIS/Transfer" or uang_dibayar >= total:
             if st.button("💾 Simpan Transaksi"):
+                # Update stok
                 for item in st.session_state.keranjang:
                     for b in barang:
                         if b["nama"] == item["nama"] and b["kategori"] == item["kategori"]:
                             b["stok"] -= item["qty"]
 
+                # Simpan transaksi
                 transaksi_baru = {
                     "waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "kasir": st.session_state.login["username"],
@@ -224,34 +227,26 @@ def halaman_transaksi():
                     "kembalian": kembalian,
                     "metode": metode
                 }
-
                 transaksi.append(transaksi_baru)
                 save_data(BARANG_FILE, barang)
                 save_data(TRANSAKSI_FILE, transaksi)
 
-                st.success("Transaksi berhasil disimpan.")
+                st.success("Transaksi berhasil disimpan ✅")
 
                 # Tampilkan struk
                 st.markdown("---")
                 st.subheader("🧾 Struk Transaksi")
-                st.text(f"Waktu   : {transaksi_baru['waktu']}")
-                st.text(f"Kasir   : {transaksi_baru['kasir']}")
-                st.text(f"Metode  : {transaksi_baru['metode']}")
-                st.text(f"Bayar   : Rp {transaksi_baru['bayar']:,.0f}")
-                st.text(f"Kembali : Rp {transaksi_baru['kembalian']:,.0f}")
-                st.markdown("**Detail Pembelian:**")
+                st.write(f"**Waktu**: {transaksi_baru['waktu']}")
+                st.write(f"**Kasir**: {transaksi_baru['kasir']}")
+                st.write(f"**Metode**: {transaksi_baru['metode']}")
                 for item in transaksi_baru['items']:
-                    st.text(f"- {item['nama']} ({item['qty']} x Rp {item['harga']:,.0f}) = Rp {item['subtotal']:,.0f}")
-                st.text(f"Total   : Rp {transaksi_baru['total']:,.0f}")
+                    st.write(f"- {item['nama']} ({item['qty']}x): Rp {item['subtotal']:,.0f}")
+                st.write(f"**Total**: Rp {transaksi_baru['total']:,.0f}")
+                st.write(f"**Dibayar**: Rp {transaksi_baru['bayar']:,.0f}")
+                st.write(f"**Kembalian**: Rp {transaksi_baru['kembalian']:,.0f}")
 
-                # Kosongkan keranjang & tandai selesai
+                # Reset keranjang
                 st.session_state.keranjang = []
-                st.session_state.transaksi_selesai = True
-
-    # Jika selesai, rerun ulang biar tampilan reset
-    if st.session_state.get("transaksi_selesai"):
-        st.session_state.transaksi_selesai = False
-        st.experimental_rerun()
 
 def halaman_riwayat():
     st.subheader("📜 Riwayat Transaksi")
