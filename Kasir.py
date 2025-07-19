@@ -227,9 +227,10 @@ def halaman_transaksi():
                 transaksi.append(transaksi_baru)
                 save_data(BARANG_FILE, barang)
                 save_data(TRANSAKSI_FILE, transaksi)
-                st.session_state.keranjang = []
                 st.success("Transaksi berhasil disimpan.")
-                st.experimental_rerun()
+                # Tandai bahwa transaksi selesai, dan biarkan rerun otomatis berdasarkan stat
+                st.session_state.transaksi_selesai = True
+
 # Riwayat
 def halaman_riwayat():
     st.subheader("📜 Riwayat Transaksi")
