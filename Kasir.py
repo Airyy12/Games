@@ -15,6 +15,7 @@ st.set_page_config(page_title="Aplikasi Kasir", layout="wide")
 AKUN_FILE = "akun.json"
 BARANG_FILE = "barang.json"
 TRANSAKSI_FILE = "transaksi.json"
+BARANG_HAPUS_FILE = "barang_dihapus.json"
 
 # Utilitas
 def load_data(file):
@@ -107,6 +108,22 @@ def halaman_barang():
     df = pd.DataFrame(barang)
     st.dataframe(df)
 
+    st.write("### 🗑️ Hapus Barang")
+    if barang:
+        index = st.selectbox("Pilih Barang", range(len(barang)), format_func=lambda i: f"{barang[i]['nama']} ({barang[i]['kategori']})")
+        keterangan = st.text_input("Alasan Penghapusan")
+        tanggal = st.date_input("Tanggal Penghapusan", datetime.now())
+        if st.button("Hapus Barang"):
+            barang_dihapus = load_data(BARANG_HAPUS_FILE)
+            data_dihapus = barang.pop(index)
+            barang_dihapus.append({
+                **data_dihapus,
+                "keterangan": keterangan,
+                "tanggal_dihapus": tanggal.strftime("%Y-%m-%d")
+            })
+            save_data(BARANG_FILE, barang)
+            save_data(BARANG_HAPUS_FILE, barang_dihapus)
+            st.success("Barang berhasil dihapus.")
 # Transaksi
 def halaman_transaksi():
     st.subheader("🛒 Transaksi")
