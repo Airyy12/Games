@@ -1,506 +1,323 @@
-# 📌 aplikasi_kasir.py
+# aplikasi_kasir.py
 import streamlit as st
 import pandas as pd
 import json
 import os
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime
 import plotly.express as px
-import plotly.graph_objects as go
 import io
-import hashlib
-import bcrypt
-import sqlite3
-from stqdm import stqdm
-import warnings
-from PIL import Image
-import cv2  # Untuk barcode scanner (opsional)
-import numpy as np
 
-# 🔒 Konfigurasi Keamanan
-warnings.filterwarnings('ignore')
-st.set_page_config(
-    page_title="Toko Wawan - Aplikasi Kasir", 
-    page_icon="🛒", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Aplikasi Kasir", layout="wide")
 
-# 📂 File & Database
-AKUN_DB = "database/akun.db"
-BARANG_DB = "database/barang.db"
-TRANSAKSI_DB = "database/transaksi.db"
-BACKUP_DIR = "backup/"
+AKUN_FILE = "akun.json"
+BARANG_FILE = "barang.json"
+TRANSAKSI_FILE = "transaksi.json"
 
-# 🔄 Inisialisasi Database
-def init_db():
-    os.makedirs("database", exist_ok=True)
-    
-    # Database Akun
-    conn = sqlite3.connect(AKUN_DB)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 username TEXT UNIQUE,
-                 password TEXT,
-                 role TEXT,
-                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    conn.commit()
-    conn.close()
-    
-    # Database Barang
-    conn = sqlite3.connect(BARANG_DB)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS products
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 nama TEXT,
-                 kategori TEXT,
-                 harga_modal REAL,
-                 harga_jual REAL,
-                 stok INTEGER,
-                 barcode TEXT UNIQUE,
-                 min_stok INTEGER DEFAULT 3,
-                 terjual INTEGER DEFAULT 0)''')
-    conn.commit()
-    conn.close()
-    
-    # Database Transaksi
-    conn = sqlite3.connect(TRANSAKSI_DB)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS transactions
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 waktu TIMESTAMP,
-                 items TEXT,  # JSON format
-                 subtotal REAL,
-                 diskon REAL,
-                 pajak REAL,
-                 total REAL,
-                 pembayaran REAL,
-                 kembalian REAL,
-                 user TEXT)''')
-    conn.commit()
-    conn.close()
+def backup_file(file):
+    """Backup file corrupt ke *_backup_TIMESTAMP.json"""
+    if os.path.exists(file):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"{file}_backup_{timestamp}"
+        shutil.copy(file, backup_name)
+        st.warning(f"⚠️ File {file} corrupt! Dibackup ke {backup_name}")
 
-# 🔐 Fungsi Keamanan
-def hash_password(password):
-    """Enkripsi password dengan bcrypt"""
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+def load_data(file, default=[]):
+    """Load JSON, reset ke default jika kosong/corrupt"""
+    if not os.path.exists(file):
+        with open(file, "w", encoding="utf-8") as f:
+            json.dump(default, f, ensure_ascii=False)
+        return default
+    try:
+        with open(file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        backup_file(file)
+        with open(file, "w", encoding="utf-8") as f:
+            json.dump(default, f, ensure_ascii=False)
+        return default
 
-def verify_password(input_password, hashed_password):
-    """Verifikasi password"""
-    return bcrypt.checkpw(input_password.encode('utf-8'), hashed_password.encode('utf-8'))
+def simpan_data(file, data):
+    """Simpan data ke JSON"""
+    with open(file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
-# 🔄 Backup Otomatis
-def auto_backup():
-    today = datetime.now().strftime("%Y%m%d")
-    backup_file = f"{BACKUP_DIR}backup_{today}.db"
-    
-    if not os.path.exists(BACKUP_DIR):
-        os.makedirs(BACKUP_DIR)
-    
-    if not os.path.exists(backup_file):
-        for db_file in [AKUN_DB, BARANG_DB, TRANSAKSI_DB]:
-            shutil.copy2(db_file, backup_file)
-        st.toast("✅ Backup otomatis berhasil dibuat", icon="💾")
+def load_akun():
+    return load_data(AKUN_FILE)
 
-# ==============================================
-# 🖥️ TAMPILAN APLIKASI
-# ==============================================
+def simpan_akun(data):
+    simpan_data(AKUN_FILE, data)
 
-# 🔐 Modul Login
-def login_module():
-    st.title("🔑 Login Sistem Kasir")
-    tab1, tab2 = st.tabs(["Login", "Daftar Akun (Admin)"])
-    
+def tampilkan_login():
+    st.title("🔒 Login Kasir")
+    tab1, tab2 = st.tabs(["🔑 Login", "📝 Buat Akun Baru"])
+
     with tab1:
+        data = load_akun()
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
         role = st.radio("Role", ["admin", "kasir"], horizontal=True)
-        
-        if st.button("Masuk", type="primary"):
-            conn = sqlite3.connect(AKUN_DB)
-            c = conn.cursor()
-            c.execute("SELECT password FROM users WHERE username=? AND role=?", (username, role))
-            result = c.fetchone()
-            conn.close()
-            
-            if result and verify_password(password, result[0]):
+        if st.button("Masuk"):
+            cocok = next((a for a in data if a["username"] == username and a["password"] == password and a["role"] == role), None)
+            if cocok:
+                st.session_state.login = True
                 st.session_state.user = username
                 st.session_state.role = role
-                st.session_state.logged_in = True
                 st.rerun()
             else:
-                st.error("Username/password salah atau role tidak sesuai!")
-    
-    with tab2:
-        if 'logged_in' in st.session_state and st.session_state.role == 'admin':
-            new_user = st.text_input("Username Baru")
-            new_pass = st.text_input("Password Baru", type="password")
-            new_role = st.selectbox("Role", ["admin", "kasir"])
-            
-            if st.button("Buat Akun"):
-                if not new_user or not new_pass:
-                    st.warning("Username dan password wajib diisi!")
-                else:
-                    try:
-                        conn = sqlite3.connect(AKUN_DB)
-                        c = conn.cursor()
-                        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                                 (new_user, hash_password(new_pass), new_role))
-                        conn.commit()
-                        conn.close()
-                        st.success(f"Akun {new_role} untuk {new_user} berhasil dibuat!")
-                    except sqlite3.IntegrityError:
-                        st.error("Username sudah terdaftar!")
+                st.error("Login gagal. Periksa username/password/role.")
 
-# 📦 Modul Produk
-def product_module():
-    st.header("📦 Manajemen Produk")
-    tab1, tab2, tab3 = st.tabs(["Daftar Produk", "Tambah Produk", "Stok Alert"])
-    
-    with tab1:
-        conn = sqlite3.connect(BARANG_DB)
-        df = pd.read_sql("SELECT * FROM products", conn)
-        conn.close()
-        
-        st.dataframe(
-            df,
-            use_container_width=True,
-            column_config={
-                "harga_modal": st.column_config.NumberColumn(format="Rp %d"),
-                "harga_jual": st.column_config.NumberColumn(format="Rp %d")
-            }
-        )
-    
     with tab2:
-        with st.form("tambah_produk"):
-            col1, col2 = st.columns(2)
-            with col1:
-                nama = st.text_input("Nama Produk*")
-                kategori = st.text_input("Kategori*")
-                barcode = st.text_input("Barcode (Opsional)")
-            with col2:
-                modal = st.number_input("Harga Modal*", min_value=0)
-                jual = st.number_input("Harga Jual*", min_value=0)
-                stok = st.number_input("Stok Awal*", min_value=0)
-            
-            if st.form_submit_button("💾 Simpan Produk"):
-                if not nama or not kategori:
-                    st.warning("Nama dan kategori wajib diisi!")
-                else:
-                    try:
-                        conn = sqlite3.connect(BARANG_DB)
-                        c = conn.cursor()
-                        c.execute("INSERT INTO products (nama, kategori, harga_modal, harga_jual, stok, barcode) VALUES (?, ?, ?, ?, ?, ?)",
-                                 (nama, kategori, modal, jual, stok, barcode))
-                        conn.commit()
-                        conn.close()
-                        st.success(f"Produk {nama} berhasil ditambahkan!")
-                    except sqlite3.IntegrityError:
-                        st.error("Barcode sudah terdaftar untuk produk lain!")
-    
-    with tab3:
-        conn = sqlite3.connect(BARANG_DB)
-        low_stock = pd.read_sql("SELECT nama, stok FROM products WHERE stok <= min_stok ORDER BY stok ASC", conn)
-        conn.close()
-        
-        if not low_stock.empty:
-            st.warning("🚨 Produk dengan Stok Menipis:")
-            st.dataframe(low_stock, hide_index=True)
-        else:
-            st.success("✅ Semua stok produk aman")
+        new_user = st.text_input("Username Baru")
+        new_pass = st.text_input("Password Baru", type="password")
+        new_role = st.radio("Pilih Role", ["admin", "kasir"], horizontal=True, key="daftar")
+        if st.button("Daftar"):
+            data = load_akun()
+            if any(u["username"] == new_user for u in data):
+                st.warning("Username sudah ada.")
+            else:
+                data.append({"username": new_user, "password": new_pass, "role": new_role})
+                simpan_akun(data)
+                st.success("Akun berhasil dibuat!")
 
-# 🛒 Modul Transaksi
-def transaction_module():
-    st.header("🛒 Transaksi Penjualan")
-    
-    # Inisialisasi keranjang
-    if 'cart' not in st.session_state:
-        st.session_state.cart = []
-    
-    col1, col2 = st.columns([3, 2])
-    
-    with col1:
-        # Pencarian Produk
-        conn = sqlite3.connect(BARANG_DB)
-        df_products = pd.read_sql("SELECT id, nama, harga_jual, stok FROM products WHERE stok > 0", conn)
-        conn.close()
-        
-        selected_product = st.selectbox(
-            "🔍 Cari Produk",
-            df_products['nama'],
-            index=None,
-            placeholder="Pilih produk..."
-        )
-        
-        if selected_product:
-            product_data = df_products[df_products['nama'] == selected_product].iloc[0]
-            
-            col_qty, col_price = st.columns(2)
-            with col_qty:
-                qty = st.number_input(
-                    "Jumlah",
-                    min_value=1,
-                    max_value=int(product_data['stok']),
-                    value=1
-                )
-            with col_price:
-                st.metric("Harga Satuan", f"Rp {product_data['harga_jual']:,.0f}")
-            
-            if st.button("➕ Tambah ke Keranjang", type="primary"):
-                st.session_state.cart.append({
-                    'id': product_data['id'],
-                    'nama': product_data['nama'],
-                    'harga': product_data['harga_jual'],
-                    'qty': qty,
-                    'subtotal': product_data['harga_jual'] * qty
+if "login" not in st.session_state:
+    st.session_state.login = False
+if not st.session_state.login:
+    tampilkan_login()
+    st.stop()
+
+# Load data
+st.session_state.barang = load_data(BARANG_FILE)
+st.session_state.transaksi = load_data(TRANSAKSI_FILE)
+
+st.sidebar.title("👤 Pengguna")
+st.sidebar.write(f"Login sebagai: **{st.session_state.user}** ({st.session_state.role})")
+if st.sidebar.button("🔓 Logout"):
+    st.session_state.clear()
+    st.rerun()
+
+menu = ["📦 Input Barang", "🛒 Kasir", "📋 Stok", "🧾 Riwayat", "📊 Dashboard", "📤 Ekspor"]
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(menu)
+
+# 📦 Input Barang
+with tab1:
+    st.header("📦 Input Barang")
+    if st.session_state.role != "admin":
+        st.warning("Hanya admin yang bisa menambahkan barang.")
+    else:
+        with st.form("form_barang"):
+            nama = st.text_input("Nama Barang")
+            kategori = st.text_input("Kategori")
+            modal = st.number_input("Harga Modal", min_value=0)
+            jual = st.number_input("Harga Jual", min_value=0)
+            stok = st.number_input("Stok Awal", min_value=0, step=1)
+            simpan = st.form_submit_button("💾 Simpan Barang")
+            if simpan and nama and kategori:
+                st.session_state.barang.append({
+                    "nama": nama,
+                    "kategori": kategori,
+                    "harga_modal": modal,
+                    "harga_jual": jual,
+                    "stok": stok,
+                    "terjual": 0
                 })
-                st.success(f"{qty} {selected_product} ditambahkan ke keranjang!")
-                st.rerun()
-    
-    with col2:
-        # Ringkasan Pembayaran
-        st.subheader("📝 Keranjang Belanja")
-        
-        if not st.session_state.cart:
-            st.info("Keranjang kosong")
-        else:
-            total = sum(item['subtotal'] for item in st.session_state.cart)
-            
-            for i, item in enumerate(st.session_state.cart):
-                cols = st.columns([3, 2, 1])
-                with cols[0]:
-                    st.write(f"{item['nama']}")
-                with cols[1]:
-                    st.write(f"{item['qty']} x Rp {item['harga']:,.0f}")
-                with cols[2]:
-                    if st.button("❌", key=f"del_{i}"):
-                        st.session_state.cart.pop(i)
-                        st.rerun()
-            
-            st.divider()
-            
-            # Pengaturan Diskon & Pajak
-            with st.expander("⚙️ Pengaturan Pembayaran"):
-                diskon = st.number_input("Diskon (%)", min_value=0, max_value=100, value=0)
-                pajak = st.number_input("Pajak (%)", min_value=0, max_value=10, value=0)
-            
-            # Hitung Total
-            total_diskon = total * diskon / 100
-            total_pajak = (total - total_diskon) * pajak / 100
-            grand_total = total - total_diskon + total_pajak
-            
-            st.metric("TOTAL PEMBAYARAN", f"Rp {grand_total:,.0f}", delta=f"Diskon: Rp {total_diskon:,.0f}")
-            
-            # Pembayaran
-            pembayaran = st.number_input(
-                "💵 Uang Diterima",
-                min_value=0.0,
-                value=float(grand_total),
-                step=1000.0
-            )
-            
-            if pembayaran < grand_total:
-                st.error("Uang tidak cukup!")
-            else:
-                kembalian = pembayaran - grand_total
-                st.metric("Kembalian", f"Rp {kembalian:,.0f}")
-                
-                if st.button("💳 Proses Pembayaran", type="primary"):
-                    process_payment(
-                        items=st.session_state.cart,
-                        subtotal=total,
-                        diskon=total_diskon,
-                        pajak=total_pajak,
-                        total=grand_total,
-                        pembayaran=pembayaran,
-                        kembalian=kembalian
-                    )
-                    st.session_state.cart = []
+                simpan_data(BARANG_FILE, st.session_state.barang)
+                st.success(f"Barang '{nama}' disimpan.")
+
+        if st.session_state.barang:
+            st.dataframe(pd.DataFrame(st.session_state.barang))
+
+# 🛒 Transaksi Kasir
+with tab2:
+    st.header("🛒 Transaksi Kasir")
+    if not st.session_state.barang:
+        st.warning("Belum ada barang di stok.")
+    else:
+        df_barang = pd.DataFrame(st.session_state.barang)
+
+        if "keranjang" not in st.session_state:
+            st.session_state.keranjang = []
+
+        cari_barang = st.text_input("🔍 Cari Barang")
+        df_filtered = df_barang[df_barang["nama"].str.contains(cari_barang, case=False)] if cari_barang else df_barang
+
+        if not df_filtered.empty:
+            barang_pilih = st.selectbox("Pilih Barang", df_filtered["nama"])
+            barang_data = df_filtered[df_filtered["nama"] == barang_pilih].iloc[0]
+            jumlah_beli = st.number_input(f"Jumlah '{barang_pilih}'", min_value=1, max_value=int(barang_data["stok"]), step=1)
+
+            if st.button("🛒 Tambah ke Keranjang"):
+                st.session_state.keranjang.append({
+                    "nama": barang_pilih,
+                    "kategori": barang_data["kategori"],
+                    "jumlah": jumlah_beli,
+                    "harga_satuan": barang_data["harga_jual"],
+                    "subtotal": jumlah_beli * barang_data["harga_jual"]
+                })
+                st.success(f"{jumlah_beli} {barang_pilih} ditambahkan ke keranjang.")
+
+        if st.session_state.keranjang:
+            st.subheader("📝 Keranjang Belanja")
+            for i, item in enumerate(st.session_state.keranjang):
+                col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 1, 2, 2, 1])
+                col1.markdown(f"**{item['nama']}**")
+                col2.markdown(f"Kategori: {item['kategori']}")
+                col3.markdown(f"Jumlah: {item['jumlah']}")
+                col4.markdown(f"Harga: Rp {item['harga_satuan']:,}")
+                col5.markdown(f"Subtotal: Rp {item['subtotal']:,}")
+                if col6.button("❌", key=f"hapus_cart_{i}"):
+                    st.session_state.keranjang.pop(i)
                     st.rerun()
 
-def process_payment(items, subtotal, diskon, pajak, total, pembayaran, kembalian):
-    """Simpan transaksi ke database"""
-    try:
-        conn = sqlite3.connect(TRANSAKSI_DB)
-        c = conn.cursor()
-        
-        # Simpan transaksi
-        c.execute("""
-            INSERT INTO transactions 
-            (waktu, items, subtotal, diskon, pajak, total, pembayaran, kembalian, user) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            json.dumps(items),
-            subtotal,
-            diskon,
-            pajak,
-            total,
-            pembayaran,
-            kembalian,
-            st.session_state.user
-        ))
-        
-        # Update stok produk
-        for item in items:
-            c.execute("""
-                UPDATE products 
-                SET stok = stok - ?, 
-                    terjual = terjual + ? 
-                WHERE id = ?
-            """, (item['qty'], item['qty'], item['id']))
-        
-        conn.commit()
-        conn.close()
-        
-        # Generate struk
-        generate_receipt(items, subtotal, diskon, pajak, total, pembayaran, kembalian)
-        st.success("✅ Transaksi berhasil diproses!")
-        st.balloons()
-        
-    except Exception as e:
-        st.error(f"Gagal memproses transaksi: {str(e)}")
+            total_bayar = sum(item["subtotal"] for item in st.session_state.keranjang)
+            st.markdown(f"## 💵 Total Bayar: Rp {total_bayar:,}")
 
-def generate_receipt(items, subtotal, diskon, pajak, total, pembayaran, kembalian):
-    """Generate struk transaksi"""
-    receipt = [
-        "TOKO WAWAN",
-        "Jl. Contoh No. 123",
-        "=" * 30,
-        f"Kasir: {st.session_state.user}",
-        f"Waktu: {datetime.now().strftime('%d/%m/%Y %H:%M')}",
-        "-" * 30
-    ]
-    
-    for item in items:
-        receipt.append(f"{item['nama'][:20]:<20} {item['qty']:>2}x {item['harga']:>7,.0f}")
-        receipt.append(f"{' ':>20} Rp {item['subtotal']:>7,.0f}")
-    
-    receipt.extend([
-        "-" * 30,
-        f"Subtotal: Rp {subtotal:>7,.0f}",
-        f"Diskon: Rp {diskon:>7,.0f}",
-        f"Pajak: Rp {pajak:>7,.0f}",
-        f"Total: Rp {total:>7,.0f}",
-        f"Bayar: Rp {pembayaran:>7,.0f}",
-        f"Kembali: Rp {kembalian:>7,.0f}",
-        "=" * 30,
-        "Terima kasih telah berbelanja!",
-        "Barang yang sudah dibeli tidak dapat dikembalikan"
-    ])
-    
-    # Tampilkan struk
-    st.subheader("📃 Struk Transaksi")
-    st.code("\n".join(receipt))
-    
-    # Download button
-    st.download_button(
-        label="⬇️ Download Struk",
-        data="\n".join(receipt),
-        file_name=f"struk_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-        mime="text/plain"
-    )
+            uang_bayar = st.number_input("💵 Uang Diterima", min_value=0, step=1000)
 
-# 📊 Modul Laporan
-# Perbaikan pada bagian report_module()
-def report_module():
-    st.header("📊 Laporan Penjualan")
-    
-    # Filter tanggal
+            if st.button("✅ Proses Transaksi"):
+                if uang_bayar < total_bayar:
+                    st.error("Uang tidak cukup.")
+                else:
+                    kembalian = uang_bayar - total_bayar
+                    waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                    for item in st.session_state.keranjang:
+                        for b in st.session_state.barang:
+                            if b["nama"] == item["nama"]:
+                                b["stok"] -= item["jumlah"]
+                                b["terjual"] += item["jumlah"]
+                                keuntungan = (b["harga_jual"] - b["harga_modal"]) * item["jumlah"]
+                                st.session_state.transaksi.append({
+                                    "waktu": waktu,
+                                    "nama": b["nama"],
+                                    "kategori": b["kategori"],
+                                    "jumlah": item["jumlah"],
+                                    "total": item["subtotal"],
+                                    "keuntungan": keuntungan,
+                                    "user": st.session_state.user
+                                })
+
+                    simpan_data(BARANG_FILE, st.session_state.barang)
+                    simpan_data(TRANSAKSI_FILE, st.session_state.transaksi)
+
+                    struk = io.StringIO()
+                    struk.write("TOKO WAWAN\nJl. Contoh No. 1, Telp. 0812-XXXX-XXXX\n")
+                    struk.write("="*32 + "\n")
+                    struk.write(f"Waktu : {waktu}\n")
+                    struk.write("-"*32 + "\n")
+                    for item in st.session_state.keranjang:
+                        struk.write(f"{item['nama']} x{item['jumlah']} @{item['harga_satuan']:,}\n")
+                        struk.write(f"       Rp {item['subtotal']:,}\n")
+                    struk.write("-"*32 + "\n")
+                    struk.write(f"Subtotal : Rp {total_bayar:,}\n")
+                    struk.write(f"Bayar    : Rp {uang_bayar:,}\n")
+                    struk.write(f"Kembalian: Rp {kembalian:,}\n")
+                    struk.write("="*32 + "\nTerima kasih atas kunjungan Anda\n")
+
+                    st.success("✅ Transaksi berhasil.")
+                    st.text(struk.getvalue())
+                    st.download_button("🖨️ Download Struk", data=struk.getvalue(), file_name="struk_toko_wawan.txt")
+                    st.session_state.keranjang.clear()
+
+# 📋 Status Stok Barang
+with tab3:
+    st.header("📋 Status Stok Barang")
+    if not st.session_state.barang:
+        st.info("Belum ada barang.")
+    else:
+        df = pd.DataFrame(st.session_state.barang)
+        kosong = df[df["stok"] == 0]
+        tersedia = df[df["stok"] > 0]
+        st.subheader("📦 Barang Habis")
+        if not kosong.empty:
+            st.dataframe(kosong)
+        else:
+            st.success("Tidak ada barang habis.")
+
+        st.subheader("📦 Barang Tersedia")
+        st.dataframe(tersedia)
+
+        if st.session_state.role == "admin":
+            st.subheader("✏️ Edit / 🗑️ Hapus Barang")
+            for i, b in enumerate(st.session_state.barang):
+                with st.expander(f"{b['nama']} - {b['kategori']} (Stok: {b['stok']})"):
+                    mode = st.radio("Mode", ["✏️ Edit", "🗑️ Hapus"], horizontal=True, key=f"mode_{i}")
+                    
+                    if mode == "✏️ Edit":
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            nama_baru = st.text_input("Nama", b["nama"], key=f"nama_{i}")
+                            kategori_baru = st.text_input("Kategori", b["kategori"], key=f"kat_{i}")
+                            modal_baru = st.number_input("Modal", value=b["harga_modal"], key=f"mod_{i}")
+                            jual_baru = st.number_input("Jual", value=b["harga_jual"], key=f"jual_{i}")
+                            stok_baru = st.number_input("Stok", value=b["stok"], key=f"stok_{i}", step=1)
+                        with col2:
+                            if st.button("💾 Edit", key=f"simpan_{i}"):
+                                b.update({
+                                    "nama": nama_baru,
+                                    "kategori": kategori_baru,
+                                    "harga_modal": modal_baru,
+                                    "harga_jual": jual_baru,
+                                    "stok": stok_baru
+                                })
+                                simpan_data(BARANG_FILE, st.session_state.barang)
+                                st.success("Barang diperbarui.")
+                    else:  # 🗑️ Hapus
+                        st.text_input("Nama", b["nama"], key=f"hapus_nama_{i}", disabled=True)
+                        jumlah_hapus = st.number_input("Jumlah Stok yang Dihapus", min_value=1, max_value=b["stok"], step=1, key=f"hapus_jml_{i}")
+                        if st.button("🗑️ Hapus", key=f"hapus_{i}"):
+                            if jumlah_hapus >= b["stok"]:
+                                st.session_state.barang.pop(i)
+                                st.success(f"Barang '{b['nama']}' dihapus total.")
+                            else:
+                                b["stok"] -= jumlah_hapus
+                                st.success(f"{jumlah_hapus} stok '{b['nama']}' dihapus.")
+                            simpan_data(BARANG_FILE, st.session_state.barang)
+                            st.rerun()
+
+# 🧾 Riwayat Transaksi
+with tab4:
+    st.header("🧾 Riwayat Transaksi")
+    df = pd.DataFrame(st.session_state.transaksi)
+    if df.empty:
+        st.info("Belum ada transaksi.")
+    else:
+        df["waktu"] = pd.to_datetime(df["waktu"])
+        tanggal_mulai = st.date_input("Dari Tanggal", df["waktu"].min().date())
+        tanggal_akhir = st.date_input("Sampai Tanggal", df["waktu"].max().date())
+        mask = (df["waktu"].dt.date >= tanggal_mulai) & (df["waktu"].dt.date <= tanggal_akhir)
+        df = df[mask]
+
+        if st.session_state.role == "kasir":
+            df = df[df["user"] == st.session_state.user]
+
+        st.dataframe(df)
+
+# 📊 Dashboard
+with tab5:
+    st.header("📊 Dashboard")
+    df = pd.DataFrame(st.session_state.transaksi)
+    if df.empty:
+        st.info("Belum ada transaksi.")
+    else:
+        tab_a, tab_b = st.tabs(["📈 Grafik", "📋 Tabel"])
+        with tab_a:
+            fig1 = px.bar(df.groupby("nama")["jumlah"].sum().reset_index(), x="nama", y="jumlah", title="Penjualan per Barang")
+            fig2 = px.pie(df, names="nama", values="keuntungan", title="Kontribusi Keuntungan")
+            st.plotly_chart(fig1, use_container_width=True)
+            st.plotly_chart(fig2, use_container_width=True)
+        with tab_b:
+            st.dataframe(df.groupby("nama")[["jumlah", "keuntungan"]].sum().reset_index())
+
+# 📤 Ekspor Data
+with tab6:
+    st.header("📤 Ekspor Data")
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Dari Tanggal", datetime.now() - timedelta(days=7))
+        if st.session_state.barang:
+            df = pd.DataFrame(st.session_state.barang)
+            st.download_button("⬇️ Unduh Barang", df.to_csv(index=False), file_name="barang.csv")
     with col2:
-        end_date = st.date_input("Sampai Tanggal", datetime.now())
-    
-    # Ambil data transaksi
-    conn = sqlite3.connect(TRANSAKSI_DB)
-    query = f"""
-        SELECT * FROM transactions 
-        WHERE date(waktu) BETWEEN '{start_date}' AND '{end_date}'
-        ORDER BY waktu DESC
-    """
-    df = pd.read_sql(query, conn)
-    conn.close()
-    
-    if df.empty:
-        st.warning("Tidak ada transaksi pada periode ini")
-        return
-    
-    # PERBAIKAN DI SINI (tambahkan tanda kurung penutup)
-    df_items = pd.json_normalize(df['items'].apply(json.loads).explode('items'))
-    df_items = pd.json_normalize(df_items['items'])
-    
-    # Tampilkan ringkasan
-    st.subheader("📈 Ringkasan")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Transaksi", len(df))
-    col2.metric("Total Pendapatan", f"Rp {df['total'].sum():,.0f}")
-    col3.metric("Rata-rata per Transaksi", f"Rp {df['total'].mean():,.0f}")
-
-    # Grafik
-    st.subheader("📊 Visualisasi Data")
-    tab1, tab2 = st.tabs(["Trend Harian", "Produk Terlaris"])
-    
-    with tab1:
-        df['tanggal'] = pd.to_datetime(df['waktu']).dt.date
-        daily_sales = df.groupby('tanggal')['total'].sum().reset_index()
-        
-        fig = px.line(
-            daily_sales, 
-            x='tanggal', 
-            y='total',
-            title="Trend Penjualan Harian",
-            labels={'tanggal': 'Tanggal', 'total': 'Total Penjualan'}
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with tab2:
-        top_products = df_items.groupby('nama').agg({
-            'qty': 'sum',
-            'subtotal': 'sum'
-        }).sort_values('qty', ascending=False).head(10)
-        
-        fig = px.bar(
-            top_products,
-            x='qty',
-            y=top_products.index,
-            orientation='h',
-            title="10 Produk Terlaris",
-            labels={'qty': 'Jumlah Terjual'}
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Tabel detail transaksi
-    st.subheader("📋 Detail Transaksi")
-    st.dataframe(df, hide_index=True, use_container_width=True)
-
-# ==============================================
-# 🚀 MAIN APP
-# ==============================================
-def main():
-    init_db()
-    auto_backup()
-    
-    if 'logged_in' not in st.session_state or not st.session_state.logged_in:
-        login_module()
-    else:
-        st.sidebar.title(f"👋 Halo, {st.session_state.user}!")
-        st.sidebar.write(f"Role: **{st.session_state.role.upper()}**")
-        
-        menu_options = {
-            "📦 Produk": product_module,
-            "🛒 Transaksi": transaction_module,
-            "📊 Laporan": report_module
-        }
-        
-        selected = st.sidebar.radio("Menu", list(menu_options.keys()))
-        menu_options[selected]()
-        
-        if st.sidebar.button("🔒 Logout"):
-            st.session_state.clear()
-            st.rerun()
-
-if __name__ == "__main__":
-    main()
+        if st.session_state.transaksi:
+            df = pd.DataFrame(st.session_state.transaksi)
+            st.download_button("⬇️ Unduh Transaksi", df.to_csv(index=False), file_name="transaksi.csv")
