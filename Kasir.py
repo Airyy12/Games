@@ -118,17 +118,29 @@ with tab1:
             stok = st.number_input("Stok Awal", min_value=0, step=1)
             simpan = st.form_submit_button("💾 Simpan Barang")
             if simpan and nama and kategori:
-                st.session_state.barang.append({
-                    "nama": nama,
-                    "kategori": kategori,
-                    "harga_modal": modal,
-                    "harga_jual": jual,
-                    "stok": stok,
-                    "terjual": 0
-                })
+                barang_sama = next(
+                    (b for b in st.session_state.barang 
+                     if b["nama"].lower() == nama.lower() and b["kategori"].lower() == kategori.lower()),
+                    None
+                )
+                if barang_sama:
+                    # Update stok dan harga
+                    barang_sama["stok"] += stok
+                    barang_sama["harga_modal"] = modal  # opsional, update jika mau
+                    barang_sama["harga_jual"] = jual    # opsional
+                    st.success(f"Barang '{nama}' di kategori '{kategori}' diperbarui (stok ditambah).")
+                else:
+                    # Tambah barang baru
+                    st.session_state.barang.append({
+                        "nama": nama,
+                        "kategori": kategori,
+                        "harga_modal": modal,
+                        "harga_jual": jual,
+                        "stok": stok,
+                        "terjual": 0
+                    })
+                    st.success(f"Barang '{nama}' disimpan.")
                 simpan_data(BARANG_FILE, st.session_state.barang)
-                st.success(f"Barang '{nama}' disimpan.")
-
         if st.session_state.barang:
             st.dataframe(pd.DataFrame(st.session_state.barang))
 
