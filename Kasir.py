@@ -14,7 +14,18 @@ BARANG_FILE = "barang.json"
 TRANSAKSI_FILE = "transaksi.json"
 KATEGORI_FILE = "kategori.json"
 
-# --- Buat admin default jika belum ada ---
+# ---------- Fungsi Load & Save ---------- #
+def load_data(file):
+    if os.path.exists(file):
+        with open(file, "r") as f:
+            return json.load(f)
+    return []
+
+def save_data(file, data):
+    with open(file, "w") as f:
+        json.dump(data, f, indent=4)
+
+# ---------- Buat Admin Default ---------- #
 def buat_admin_default():
     if not os.path.exists(AKUN_FILE):
         admin_default = [{
@@ -22,19 +33,16 @@ def buat_admin_default():
             "password": bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode(),
             "role": "admin"
         }]
-        with open(AKUN_FILE, "w") as f:
-            json.dump(admin_default, f, indent=4)
+        save_data(AKUN_FILE, admin_default)
     else:
-        with open(AKUN_FILE, "r") as f:
-            data = json.load(f)
-        if not any(user['role'] == 'admin' for user in data):
-            data.append({
+        akun = load_data(AKUN_FILE)
+        if not any(user['role'] == 'admin' for user in akun):
+            akun.append({
                 "username": "admin",
                 "password": bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode(),
                 "role": "admin"
             })
-            with open(AKUN_FILE, "w") as f:
-                json.dump(data, f, indent=4)
+            save_data(AKUN_FILE, akun)
 
 buat_admin_default()
 
@@ -79,6 +87,10 @@ def halaman_barang():
     st.header("📦 Manajemen Barang")
     barang = load_data(BARANG_FILE)
     kategori = load_data(KATEGORI_FILE)
+
+    if not kategori:
+        st.warning("Kategori masih kosong. Tambahkan kategori terlebih dahulu.")
+        return
 
     nama = st.text_input("Nama Barang")
     kategori_input = st.selectbox("Kategori", kategori)
