@@ -138,7 +138,6 @@ def halaman_barang():
 
 
 # Transaksi
-
 def halaman_transaksi():
     st.subheader("🛒 Transaksi")
     barang = load_data(BARANG_FILE)
@@ -215,21 +214,44 @@ def halaman_transaksi():
                     for b in barang:
                         if b["nama"] == item["nama"] and b["kategori"] == item["kategori"]:
                             b["stok"] -= item["qty"]
+
                 transaksi_baru = {
                     "waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "kasir": st.session_state.login["username"],
-                    "items": st.session_state.keranjang,
+                    "items": st.session_state.keranjang.copy(),
                     "total": total,
                     "bayar": uang_dibayar if metode == "Cash" else total,
                     "kembalian": kembalian,
                     "metode": metode
                 }
+
                 transaksi.append(transaksi_baru)
                 save_data(BARANG_FILE, barang)
                 save_data(TRANSAKSI_FILE, transaksi)
+
                 st.success("Transaksi berhasil disimpan.")
-                # Tandai bahwa transaksi selesai, dan biarkan rerun otomatis berdasarkan stat
+
+                # Tampilkan struk
+                st.markdown("---")
+                st.subheader("🧾 Struk Transaksi")
+                st.text(f"Waktu   : {transaksi_baru['waktu']}")
+                st.text(f"Kasir   : {transaksi_baru['kasir']}")
+                st.text(f"Metode  : {transaksi_baru['metode']}")
+                st.text(f"Bayar   : Rp {transaksi_baru['bayar']:,.0f}")
+                st.text(f"Kembali : Rp {transaksi_baru['kembalian']:,.0f}")
+                st.markdown("**Detail Pembelian:**")
+                for item in transaksi_baru['items']:
+                    st.text(f"- {item['nama']} ({item['qty']} x Rp {item['harga']:,.0f}) = Rp {item['subtotal']:,.0f}")
+                st.text(f"Total   : Rp {transaksi_baru['total']:,.0f}")
+
+                # Kosongkan keranjang & tandai selesai
+                st.session_state.keranjang = []
                 st.session_state.transaksi_selesai = True
+
+    # Jika selesai, rerun ulang biar tampilan reset
+    if st.session_state.get("transaksi_selesai"):
+        st.session_state.transaksi_selesai = False
+        st.experimental_rerun()
 
 def halaman_riwayat():
     st.subheader("📜 Riwayat Transaksi")
