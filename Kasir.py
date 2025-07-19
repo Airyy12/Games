@@ -192,6 +192,7 @@ setup_admin()
 if "login" not in st.session_state:
     login()
 
+# Menu dengan ikon
 menu = {
     "Dashboard": halaman_dashboard,
     "Barang": halaman_barang,
@@ -202,14 +203,51 @@ menu = {
 if st.session_state.login["role"] == "admin":
     menu["Manajemen Akun"] = halaman_akun
 
+# ===== Sidebar Fancy =====
 with st.sidebar:
-    st.title("🧾 Kasir App")
-    st.markdown(f"**👤 Login sebagai:** `{st.session_state.login['username']}` ({st.session_state.login['role']})")
-    pilihan = st.radio("Menu", list(menu.keys()))
-    if st.button("Logout"):
+    st.markdown("""
+        <style>
+        .sidebar-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .user-badge {
+            display: inline-block;
+            background-color: #22c55e;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="sidebar-title">📋 <span>Kasir App</span></div>', unsafe_allow_html=True)
+
+    st.markdown(f"""
+        <div style="margin-bottom: 12px;">
+            👤 Login sebagai: <span class="user-badge">{st.session_state.login['username']}</span><br>
+            ({st.session_state.login['role']})
+        </div>
+    """, unsafe_allow_html=True)
+
+    menu_icon = {
+        "Dashboard": "🏠",
+        "Barang": "📦",
+        "Transaksi": "🛒",
+        "Riwayat": "📜",
+        "Laporan": "📈",
+        "Manajemen Akun": "👥"
+    }
+    pilihan = st.radio("📌 Menu", [f"{menu_icon[m]} {m}" for m in menu.keys()])
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+    if st.button("🔓 Logout"):
         del st.session_state.login
         st.experimental_rerun()
 
+# Jalankan halaman terpilih
+menu_label = pilihan.split(" ", 1)[1]
 st.title("Aplikasi Kasir")
-menu[pilihan]()
-
+menu[menu_label]()
