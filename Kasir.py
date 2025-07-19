@@ -37,7 +37,6 @@ def check_password(password, hashed):
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 # Setup admin awal
-
 def setup_admin():
     akun = load_data(AKUN_FILE)
     if not akun:
@@ -80,7 +79,6 @@ def halaman_dashboard():
     col1, col2 = st.columns(2)
     col1.metric("Jumlah Transaksi", total_transaksi)
     col2.metric("Total Pendapatan", f"Rp {total_pendapatan:,.0f}")
-
 
 # Barang
 def halaman_barang():
@@ -136,7 +134,6 @@ def halaman_barang():
             save_data(BARANG_FILE, barang)
             save_data(BARANG_HAPUS_FILE, barang_dihapus)
             st.success("Barang berhasil dihapus.")
-
 
 # Transaksi
 def halaman_transaksi():
@@ -263,7 +260,7 @@ def halaman_riwayat():
         df = pd.DataFrame(transaksi)
         df["waktu"] = pd.to_datetime(df["waktu"])
 
-        # 🎯 Filter tanggal transaksi
+        # Filter tanggal transaksi
         st.markdown("### 🔎 Filter Transaksi")
         tanggal_mulai = st.date_input("📅 Tanggal Mulai", df["waktu"].min().date(), key="transaksi_mulai")
         tanggal_akhir = st.date_input("📅 Tanggal Akhir", df["waktu"].max().date(), key="transaksi_akhir")
@@ -271,8 +268,6 @@ def halaman_riwayat():
         df_filtered = df[mask]
 
         st.dataframe(df_filtered)
-
-    # =======================
 
     st.subheader("🗑️ Riwayat Penghapusan Barang")
     hapus = load_data(BARANG_HAPUS_FILE)
@@ -282,7 +277,7 @@ def halaman_riwayat():
         df_hapus = pd.DataFrame(hapus)
         df_hapus["tanggal_dihapus"] = pd.to_datetime(df_hapus["tanggal_dihapus"])
 
-        # 🎯 Filter tanggal penghapusan
+        # Filter tanggal penghapusan
         st.markdown("### 🔎 Filter Penghapusan Barang")
         hapus_mulai = st.date_input("📅 Tanggal Mulai", df_hapus["tanggal_dihapus"].min().date(), key="hapus_mulai")
         hapus_akhir = st.date_input("📅 Tanggal Akhir", df_hapus["tanggal_dihapus"].max().date(), key="hapus_akhir")
@@ -290,7 +285,7 @@ def halaman_riwayat():
         df_hapus_filtered = df_hapus[hapus_mask]
 
         st.dataframe(df_hapus_filtered)
-# Laporan
+
 def halaman_laporan():
     st.subheader("📈 Laporan Keuangan")
     data = load_data(TRANSAKSI_FILE)
@@ -302,7 +297,7 @@ def halaman_laporan():
     df = pd.DataFrame(data)
     df['waktu'] = pd.to_datetime(df['waktu'])
     df['tanggal'] = df['waktu'].dt.date
-    df['bulan'] = df['waktu'].dt.strftime('%Y-%m')  # Format: Tahun-Bulan
+    df['bulan'] = df['waktu'].dt.strftime('%Y-%m')
 
     # Filter Tanggal
     col1, col2 = st.columns(2)
@@ -313,7 +308,7 @@ def halaman_laporan():
 
     df_filtered = df[(df['tanggal'] >= start_date) & (df['tanggal'] <= end_date)]
 
-    # Ringkasan Pendapatan (Card)
+    # Ringkasan Pendapatan
     st.write("### 📊 Ringkasan Pendapatan")
     total_pendapatan = df_filtered['total'].sum()
     rata_perhari = df_filtered.groupby('tanggal')['total'].sum().mean() if not df_filtered.empty else 0
@@ -323,7 +318,7 @@ def halaman_laporan():
     col2.metric("Rata-rata per Hari", f"Rp {rata_perhari:,.0f}")
     col3.metric("Jumlah Transaksi", len(df_filtered))
 
-    # Pendapatan per Kasir (Tabel)
+    # Pendapatan per Kasir
     st.write("### 🧑‍💼 Pendapatan per Kasir")
     kasir_df = df_filtered.groupby('kasir')['total'].agg(['sum', 'count']).reset_index()
     kasir_df.columns = ['Kasir', 'Total Pendapatan', 'Jumlah Transaksi']
@@ -335,33 +330,21 @@ def halaman_laporan():
             df_filtered.to_excel(writer, sheet_name="Transaksi", index=False)
             kasir_df.to_excel(writer, sheet_name="Kasir", index=False)
         st.success("Laporan berhasil di-generate!")
-        
+
 def halaman_statistik():
-    import plotly.express as px
-    from datetime import datetime
     st.subheader("📊 Statistik Penjualan")
+    data = load_data(TRANSAKSI_FILE)
     
-    # Load data
-    try:
-        data = load_data(TRANSAKSI_FILE)
-        if not data:
-            st.info("Belum ada data transaksi.")
-            return
-    except Exception as e:
-        st.error(f"Gagal memuat data: {str(e)}")
+    if not data:
+        st.info("Belum ada data transaksi.")
         return
 
-    # Convert to DataFrame
-    try:
-        df = pd.DataFrame(data)
-        df['waktu'] = pd.to_datetime(df['waktu'])
-        df['tanggal'] = df['waktu'].dt.date
-        df['bulan'] = df['waktu'].dt.strftime('%Y-%m')
-    except Exception as e:
-        st.error(f"Error memproses data: {str(e)}")
-        return
+    df = pd.DataFrame(data)
+    df['waktu'] = pd.to_datetime(df['waktu'])
+    df['tanggal'] = df['waktu'].dt.date
+    df['bulan'] = df['waktu'].dt.strftime('%Y-%m')
 
-    # Date range filter
+    # Filter Tanggal
     min_date = df['tanggal'].min() if not df.empty else datetime.now().date()
     max_date = df['tanggal'].max() if not df.empty else datetime.now().date()
     
@@ -371,112 +354,72 @@ def halaman_statistik():
     with col2:
         end_date = st.date_input("Tanggal Akhir", max_date, key="stat_end")
 
-    # Filter data
     df_filtered = df[(df['tanggal'] >= start_date) & (df['tanggal'] <= end_date)]
 
-    # 1. Daily Income Chart
+    # Grafik Pendapatan Harian
     st.write("### 📈 Pendapatan Harian")
-    try:
-        daily_income = df_filtered.groupby('tanggal')['total'].sum().reset_index()
-        if not daily_income.empty:
-            daily_income['total'] = daily_income['total'].astype(int)  # Remove decimals
-            
-            fig_daily = px.line(
-                daily_income,
-                x='tanggal',
-                y='total',
-                title="Pendapatan Harian",
-                labels={'tanggal': 'Tanggal', 'total': 'Pendapatan (Rp)'},
-                markers=True
-            )
-            fig_daily.update_traces(line_color='#4285F4', line_width=2)
-            fig_daily.update_layout(hovermode='x unified')
-            st.plotly_chart(fig_daily, use_container_width=True)
-        else:
-            st.warning("Tidak ada data pendapatan di rentang tanggal ini.")
-    except Exception as e:
-        st.error(f"Gagal membuat grafik pendapatan: {str(e)}")
+    daily_income = df_filtered.groupby('tanggal')['total'].sum().reset_index()
+    if not daily_income.empty:
+        fig = px.line(
+            daily_income,
+            x='tanggal',
+            y='total',
+            title="Pendapatan Harian",
+            labels={'tanggal': 'Tanggal', 'total': 'Pendapatan (Rp)'}
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Tidak ada data pendapatan di rentang tanggal ini.")
 
-    # 2. Top Products Chart
+    # Grafik Barang Terlaris
     st.write("### 🏆 Barang Terlaris")
-    try:
-        all_items = []
-        for transaction in data:
-            for item in transaction['items']:
-                all_items.append({
-                    'nama': item['nama'],
-                    'qty': item['qty'],
-                    'pendapatan': item['harga'] * item['qty']
+    all_items = []
+    for t in data:
+        for item in t['items']:
+            all_items.append(item['nama'])
+    
+    if all_items:
+        item_counts = pd.Series(all_items).value_counts().reset_index()
+        item_counts.columns = ['Barang', 'Jumlah Terjual']
+        fig = px.bar(
+            item_counts.head(10),
+            x='Barang',
+            y='Jumlah Terjual',
+            title="10 Barang Terlaris"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Belum ada barang yang terjual.")
+
+def halaman_akun():
+    st.subheader("👤 Manajemen Akun")
+    akun = load_data(AKUN_FILE)
+    
+    # Form tambah akun baru
+    with st.expander("➕ Tambah Akun Baru"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        role = st.selectbox("Role", ["admin", "kasir"])
+        if st.button("Simpan Akun"):
+            if any(a["username"] == username for a in akun):
+                st.error("Username sudah digunakan!")
+            else:
+                akun.append({
+                    "username": username,
+                    "password": hash_password(password),
+                    "role": role
                 })
-        
-        if all_items:
-            items_df = pd.DataFrame(all_items)
-            top_products = items_df.groupby('nama').agg({
-                'qty': 'sum',
-                'pendapatan': 'sum'
-            }).reset_index().sort_values('qty', ascending=False).head(10)
+                save_data(AKUN_FILE, akun)
+                st.success("Akun berhasil ditambahkan!")
+                st.rerun()
 
-            fig_products = px.bar(
-                top_products,
-                x='nama',
-                y='qty',
-                title="10 Barang Terlaris",
-                labels={'nama': 'Nama Barang', 'qty': 'Jumlah Terjual'},
-                color='pendapatan',
-                color_continuous_scale='Blues'
-            )
-            st.plotly_chart(fig_products, use_container_width=True)
-        else:
-            st.warning("Belum ada barang yang terjual.")
-    except Exception as e:
-        st.error(f"Gagal membuat grafik barang: {str(e)}")
-
-    # 3. Payment Method Chart
-    st.write("### 💳 Metode Pembayaran")
-    try:
-        if not df_filtered.empty:
-            payment_counts = df_filtered['metode'].value_counts().reset_index()
-            payment_counts.columns = ['Metode', 'Jumlah']
-            
-            fig_payment = px.pie(
-                payment_counts,
-                names='Metode',
-                values='Jumlah',
-                title="Distribusi Metode Pembayaran",
-                hole=0.3
-            )
-            st.plotly_chart(fig_payment, use_container_width=True)
-        else:
-            st.warning("Tidak ada data pembayaran di rentang tanggal ini.")
-    except Exception as e:
-        st.error(f"Gagal membuat grafik pembayaran: {str(e)}")
-
-    # 4. Monthly Summary
-    st.write("### 📅 Ringkasan Bulanan")
-    try:
-        if not df.empty:
-            monthly = df.groupby('bulan')['total'].agg(['sum', 'count']).reset_index()
-            monthly.columns = ['Bulan', 'Total Pendapatan', 'Jumlah Transaksi']
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.dataframe(monthly.style.format({
-                    'Total Pendapatan': 'Rp {:,}',
-                    'Jumlah Transaksi': '{:,}'
-                }), hide_index=True)
-            
-            with col2:
-                fig_monthly = px.bar(
-                    monthly,
-                    x='Bulan',
-                    y='Total Pendapatan',
-                    title="Pendapatan Bulanan"
-                )
-                st.plotly_chart(fig_monthly, use_container_width=True)
-        else:
-            st.warning("Tidak ada data bulanan.")
-    except Exception as e:
-        st.error(f"Gagal membuat ringkasan bulanan: {str(e)}")
+    # Tabel daftar akun
+    st.write("### Daftar Akun")
+    if akun:
+        df = pd.DataFrame(akun).drop(columns=["password"])
+        st.dataframe(df, hide_index=True)
+    else:
+        st.info("Belum ada akun terdaftar")
 
 # ========== MAIN ==========
 setup_admin()
@@ -494,9 +437,8 @@ menu = {
     "Statistik": halaman_statistik
 }
 
-# Hanya tambahkan menu admin jika role sesuai
 if st.session_state["login"]["role"] == "admin":
-    menu["Manajemen Akun"] = halaman_akun  # Pastikan key-nya sama dengan di menu_icon
+    menu["Manajemen Akun"] = halaman_akun
 
 with st.sidebar:
     st.markdown("""
