@@ -121,7 +121,8 @@ def halaman_barang():
             data_dihapus.update({
                 "jumlah_dihapus": jumlah_hapus,
                 "keterangan": keterangan,
-                "tanggal_dihapus": tanggal
+                "tanggal_dihapus": tanggal,
+                "dihapus_oleh": st.session_state.login["username"]
             })
 
             if jumlah_hapus == barang[index]["stok"]:
@@ -193,10 +194,16 @@ def halaman_transaksi():
 # Riwayat
 def halaman_riwayat():
     st.subheader("📜 Riwayat Transaksi")
-    data = load_data(TRANSAKSI_FILE)
-    df = pd.DataFrame(data)
-    st.dataframe(df)
+    transaksi = load_data(TRANSAKSI_FILE)
+    if transaksi:
+        df_trans = pd.DataFrame(transaksi)
+        st.dataframe(df_trans)
 
+    st.subheader("🗑️ Riwayat Penghapusan Barang")
+    hapus = load_data(BARANG_HAPUS_FILE)
+    if hapus:
+        df_hapus = pd.DataFrame(hapus)
+        st.dataframe(df_hapus)
 # Laporan
 
 def halaman_laporan():
