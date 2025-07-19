@@ -289,7 +289,6 @@ def halaman_riwayat():
         df_hapus_filtered = df_hapus[hapus_mask]
 
         st.dataframe(df_hapus_filtered)
-
 # Laporan
 
 def halaman_laporan():
@@ -329,18 +328,18 @@ def halaman_laporan():
         df = df[df['kasir'] == selected_kasir]
 
     st.write("### 📅 Pendapatan Harian")
-    harian = df.groupby("tanggal")["total"].sum()
-    fig_harian = px.line(harian, title="Pendapatan Harian")
+    harian = df.groupby("tanggal")["total"].sum().reset_index()
+    fig_harian = px.line(harian, x="tanggal", y="total", title="Pendapatan Harian")
     st.plotly_chart(fig_harian)
 
     st.write("### 📆 Pendapatan Bulanan")
-    bulanan = df.groupby("bulan")["total"].sum()
-    fig_bulanan = px.bar(bulanan, title="Pendapatan Bulanan")
+    bulanan = df.groupby("bulan")["total"].sum().reset_index()
+    fig_bulanan = px.bar(bulanan, x="bulan", y="total", title="Pendapatan Bulanan")
     st.plotly_chart(fig_bulanan)
 
     st.write("### 📊 Rata-rata Harian & Total")
     total_pendapatan = df['total'].sum()
-    rata_harian = harian.mean() if not harian.empty else 0
+    rata_harian = harian['total'].mean() if not harian.empty else 0
     st.metric("Total Pendapatan", f"Rp {total_pendapatan:,.0f}")
     st.metric("Rata-rata/Hari", f"Rp {rata_harian:,.0f}")
 
@@ -415,7 +414,8 @@ def halaman_statistik():
     st.write("### 💰 Pendapatan Harian")
     if not df.empty:
         pendapatan_harian = df.groupby("tanggal")["total"].sum().reset_index().sort_values(by="tanggal")
-        st.dataframe(pendapatan_harian.rename(columns={"total": "Pendapatan"}))
+        pendapatan_harian = pendapatan_harian.rename(columns={"total": "Pendapatan"})
+        st.dataframe(pendapatan_harian)
         fig_pendapatan = px.line(pendapatan_harian, x="tanggal", y="Pendapatan", title="Pendapatan Harian")
         st.plotly_chart(fig_pendapatan)
     else:
@@ -454,7 +454,6 @@ def halaman_statistik():
         st.plotly_chart(fig_kasir)
     else:
         st.info("Tidak ada data kasir di rentang tanggal ini.")
-
 # Akun
 
 def halaman_akun():
