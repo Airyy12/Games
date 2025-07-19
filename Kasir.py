@@ -200,7 +200,7 @@ menu = {
     "Riwayat": halaman_riwayat,
     "Laporan": halaman_laporan,
 }
-if st.session_state.login["role"] == "admin":
+if "login" in st.session_state and st.session_state.login["role"] == "admin":
     menu["Manajemen Akun"] = halaman_akun
 
 # ===== Sidebar Fancy =====
