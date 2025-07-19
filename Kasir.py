@@ -395,36 +395,31 @@ with st.sidebar:
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="sidebar-title">📋 <span>Kasir App</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-title">\U0001F4CB <span>Kasir App</span></div>', unsafe_allow_html=True)
     st.markdown(f"""
         <div style="margin-bottom: 12px;">
-            👤 Login sebagai: <span class="user-badge">{st.session_state.login['username']}</span><br>
+            \U0001F464 Login sebagai: <span class="user-badge">{st.session_state.login['username']}</span><br>
             ({st.session_state.login['role']})
         </div>
     """, unsafe_allow_html=True)
 
     menu_icon = {
-        "Dashboard": "🏠",
-        "Barang": "📦",
-        "Transaksi": "🛒",
-        "Riwayat": "📜",
-        "Laporan": "📈",
-        "Statistik": "📊",
-        "Manajemen Akun": "👥"
+        "Dashboard": "\U0001F3E0",
+        "Barang": "\U0001F4E6",
+        "Transaksi": "\U0001F6D2",
+        "Riwayat": "\U0001F4DC",
+        "Laporan": "\U0001F4C8",
+        "Statistik": "\U0001F4CA",
+        "Manajemen Akun": "\U0001F465"
     }
-    pilihan = st.radio("📌 Menu", [f"{menu_icon[m]} {m}" for m in menu.keys()])
+    pilihan = st.radio("\U0001F4CC Menu", [f"{menu_icon[m]} {m}" for m in menu.keys()])
 
     st.markdown("<hr>", unsafe_allow_html=True)
-    if st.button("🔓 Logout"):
+    if st.button("\U0001F513 Logout"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.success("Logout berhasil.")
-        st.experimental_rerun()
-
-menu_label = pilihan.split(" ", 1)[1]
-st.title("Aplikasi Kasir")
-menu[menu_label]()
-
+        st.rerun()
 
 menu_label = pilihan.split(" ", 1)[1]
 st.title("Aplikasi Kasir")
