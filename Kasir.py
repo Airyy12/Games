@@ -102,6 +102,9 @@ def halaman_barang():
                 st.success("Barang ditambahkan.")
 
     df = pd.DataFrame(barang)
+    cari = st.text_input("🔍 Cari Barang")
+    if cari:
+        df = df[df['nama'].str.contains(cari, case=False, na=False)]
     st.dataframe(df)
 
 # Halaman Transaksi
@@ -151,6 +154,15 @@ def halaman_riwayat():
     st.subheader("📜 Riwayat Transaksi")
     data = load_data(TRANSAKSI_FILE)
     df = pd.DataFrame(data)
+    if not df.empty:
+        df["waktu"] = pd.to_datetime(df["waktu"])
+        kasir_filter = st.selectbox("Filter Kasir", options=["Semua"] + sorted(df["kasir"].unique().tolist()))
+        tanggal = st.date_input("Filter Tanggal", value=None)
+
+        if kasir_filter != "Semua":
+            df = df[df["kasir"] == kasir_filter]
+        if tanggal:
+            df = df[df["waktu"].dt.date == tanggal]
     st.dataframe(df)
 
 # Halaman Laporan
@@ -225,12 +237,13 @@ with st.sidebar:
 
     st.markdown('<div class="sidebar-title">📋 <span>Kasir App</span></div>', unsafe_allow_html=True)
 
-    st.markdown(f"""
-        <div style="margin-bottom: 12px;">
-            👤 Login sebagai: <span class="user-badge">{st.session_state.login['username']}</span><br>
-            ({st.session_state.login['role']})
-        </div>
-    """, unsafe_allow_html=True)
+    if "login" in st.session_state:
+        st.markdown(f"""
+            <div style="margin-bottom: 12px;">
+                👤 Login sebagai: <span class="user-badge">{st.session_state.login['username']}</span><br>
+                ({st.session_state.login['role']})
+            </div>
+        """, unsafe_allow_html=True)
 
     menu_icon = {
         "Dashboard": "🏠",
@@ -240,10 +253,11 @@ with st.sidebar:
         "Laporan": "📈",
         "Manajemen Akun": "👥"
     }
+
     pilihan = st.radio("📌 Menu", [f"{menu_icon[m]} {m}" for m in menu.keys()])
 
     st.markdown("<hr>", unsafe_allow_html=True)
-    if st.button("🔓 Logout"):
+    if "login" in st.session_state and st.button("🔓 Logout"):
         del st.session_state.login
         st.experimental_rerun()
 
