@@ -111,20 +111,29 @@ def halaman_barang():
     st.write("### 🗑️ Hapus Barang")
     if barang:
         index = st.selectbox("Pilih Barang", range(len(barang)), format_func=lambda i: f"{barang[i]['nama']} ({barang[i]['kategori']})")
+        jumlah_hapus = st.number_input("Jumlah yang Dihapus", min_value=1, max_value=barang[index]['stok'], step=1)
         keterangan = st.text_input("Alasan Penghapusan")
         tanggal = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         st.code(tanggal, language="text")
         if st.button("Hapus Barang"):
             barang_dihapus = load_data(BARANG_HAPUS_FILE)
-            data_dihapus = barang.pop(index)
-            barang_dihapus.append({
-                **data_dihapus,
+            data_dihapus = barang[index].copy()
+            data_dihapus.update({
+                "jumlah_dihapus": jumlah_hapus,
                 "keterangan": keterangan,
                 "tanggal_dihapus": tanggal
             })
+
+            if jumlah_hapus == barang[index]["stok"]:
+                barang.pop(index)
+            else:
+                barang[index]["stok"] -= jumlah_hapus
+
+            barang_dihapus.append(data_dihapus)
             save_data(BARANG_FILE, barang)
             save_data(BARANG_HAPUS_FILE, barang_dihapus)
             st.success("Barang berhasil dihapus.")
+
 # Transaksi
 def halaman_transaksi():
     st.subheader("🛒 Transaksi")
