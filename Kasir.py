@@ -64,11 +64,10 @@ def login():
         for a in akun:
             if a["username"] == username and check_password(password, a["password"]):
                 st.session_state.login = {"username": username, "role": a["role"]}
-                st.success("Login berhasil! Memuat aplikasi...")
-                st.stop()  # Ini cukup, karena di main akan rerun dan menu akan tampil
+                st.success("Login berhasil!")
+                st.experimental_rerun()
         st.error("Username atau password salah.")
-        return
-
+        st.stop()
 
 # Dashboard
 def halaman_dashboard():
@@ -113,43 +112,57 @@ def halaman_transaksi():
     st.subheader("🛒 Transaksi")
     barang = load_data(BARANG_FILE)
     transaksi = load_data(TRANSAKSI_FILE)
-    keranjang = []
-    total = 0
+    kategori_terpilih = st.selectbox("Pilih Kategori", sorted(set(b['kategori'] for b in barang)))
 
-    for b in barang:
-        qty = st.number_input(f"{b['nama']} ({b['kategori']}) - Stok: {b['stok']}", 0, b['stok'], key=b['nama'])
-        if qty > 0:
-            subtotal = b['harga'] * qty
-            keranjang.append({
-                "nama": b['nama'],
-                "kategori": b['kategori'],
-                "qty": qty,
-                "harga": b['harga'],
-                "harga_modal": b.get("harga_modal", 0),
-                "subtotal": subtotal
-            })
-            total += subtotal
+    nama_barang_list = [b['nama'] for b in barang if b['kategori'] == kategori_terpilih]
+    nama_barang = st.selectbox("Pilih Barang", nama_barang_list)
 
-    if keranjang:
-        st.write("### Ringkasan Transaksi")
-        df = pd.DataFrame(keranjang)
+    b_dipilih = next((b for b in barang if b['nama'] == nama_barang and b['kategori'] == kategori_terpilih), None)
+    if not b_dipilih:
+        st.warning("Barang tidak ditemukan.")
+        return
+
+    qty = st.number_input(f"Jumlah ({b_dipilih['stok']} tersedia)", 0, b_dipilih['stok'])
+
+    if "keranjang" not in st.session_state:
+        st.session_state.keranjang = []
+
+    if st.button("➕ Tambah ke Keranjang") and qty > 0:
+        st.session_state.keranjang.append({
+            "nama": b_dipilih['nama'],
+            "kategori": b_dipilih['kategori'],
+            "qty": qty,
+            "harga": b_dipilih['harga'],
+            "harga_modal": b_dipilih.get("harga_modal", 0),
+            "subtotal": b_dipilih['harga'] * qty
+        })
+
+    if st.session_state.keranjang:
+        st.write("### 🧺 Keranjang Belanja")
+        df = pd.DataFrame(st.session_state.keranjang)
         st.dataframe(df)
+        total = sum(item['subtotal'] for item in st.session_state.keranjang)
         st.write(f"**Total: Rp {total:,.0f}**")
-        if st.button("Simpan Transaksi"):
-            for item in keranjang:
+
+        hapus_idx = st.number_input("Hapus item di keranjang (berdasarkan indeks)", 0, len(st.session_state.keranjang)-1, step=1)
+        if st.button("❌ Hapus Item"):
+            st.session_state.keranjang.pop(hapus_idx)
+
+        if st.button("💾 Simpan Transaksi"):
+            for item in st.session_state.keranjang:
                 for b in barang:
                     if b["nama"] == item["nama"] and b["kategori"] == item["kategori"]:
                         b["stok"] -= item["qty"]
             transaksi.append({
                 "waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "kasir": st.session_state.login["username"],
-                "items": keranjang,
+                "items": st.session_state.keranjang,
                 "total": total
             })
             save_data(BARANG_FILE, barang)
             save_data(TRANSAKSI_FILE, transaksi)
+            st.session_state.keranjang = []
             st.success("Transaksi berhasil disimpan.")
-
 # Riwayat
 def halaman_riwayat():
     st.subheader("📜 Riwayat Transaksi")
@@ -274,7 +287,7 @@ setup_admin()
 
 if "login" not in st.session_state:
     login()
-    st.stop()  # Penting agar tidak lanjut ke bawah sebelum login
+    st.stop()
 
 menu = {
     "Dashboard": halaman_dashboard,
@@ -336,3 +349,4 @@ with st.sidebar:
 menu_label = pilihan.split(" ", 1)[1]
 st.title("Aplikasi Kasir")
 menu[menu_label]()
+
