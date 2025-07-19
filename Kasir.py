@@ -612,58 +612,81 @@ menu = {
 if st.session_state["login"]["role"] == "admin":
     menu["Manajemen Akun"] = halaman_akun
 
+# SIDEBAR BARU YANG DIMINTA
 with st.sidebar:
+    # CSS Modern
     st.markdown("""
-        <style>
-        .sidebar-title {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 10px;
+    <style>
+        .sidebar-header {
+            font-family: 'Inter', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #e2e8f0;
         }
-        .user-badge {
-            display: inline-block;
-            background-color: #22c55e;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 8px;
-            font-size: 13px;
+        .user-display {
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+            padding: 0.5rem;
+            background: #f8fafc;
+            border-radius: 0.5rem;
         }
-        </style>
+        .username {
+            font-weight: 500;
+        }
+        .user-role {
+            color: #64748b;
+            font-size: 0.85em;
+        }
+        .menu-item {
+            padding: 0.5rem 0;
+            transition: all 0.2s;
+        }
+        .menu-item:hover {
+            background: #f1f5f9;
+        }
+    </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="sidebar-title">\U0001F4CB <span>Kasir App</span></div>', unsafe_allow_html=True)
-    st.markdown(f"""
-        <div style="margin-bottom: 12px;">
-            \U0001F464 Login sebagai: <span class="user-badge">{st.session_state.login['username']}</span><br>
-            ({st.session_state.login['role']})
-        </div>
-    """, unsafe_allow_html=True)
-
-    menu_icon = {
+    st.markdown('<div class="sidebar-header">Kasir App</div>', unsafe_allow_html=True)
+    
+    # Format: username (role)
+    st.markdown(
+        f'<div class="user-display">'
+        f'<span class="username">{st.session_state.login["username"]}</span> '
+        f'<span class="user-role">({st.session_state.login["role"]})</span>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+    
+    # Menu items
+    menu_icons = {
         "Dashboard": "📊",
         "Barang": "📦",
-        "Transaksi": "🛒",
-        "Riwayat": "📜",
-        "Laporan": "📈",
-        "Statistik": "📊",
-        "Profil Saya": "👤",
-        "Manajemen Akun": "👥"
+        "Transaksi": "💳",
+        "Riwayat": "🕒",
+        "Laporan": "📄",
+        "Statistik": "📈",
+        "Profil Saya": "👤"
     }
     
-    # Hanya tampilkan menu yang sesuai dengan role
-    available_menus = list(menu.keys())
-    if st.session_state["login"]["role"] != "admin":
-        available_menus.remove("Manajemen Akun")
+    if st.session_state.login["role"] == "admin":
+        menu_icons["Manajemen Akun"] = "👥"
     
-    pilihan = st.radio("\U0001F4CC Menu", [f"{menu_icon[m]} {m}" for m in available_menus])
+    selected = st.radio(
+        "Menu",
+        options=list(menu.keys()),
+        format_func=lambda x: f"{menu_icons.get(x, '')} {x}",
+        label_visibility="collapsed"
+    )
 
-    st.markdown("<hr>", unsafe_allow_html=True)
-    if st.button("\U0001F513 Logout"):
+    if st.button("🚪 Logout", use_container_width=True):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
-        st.success("Logout berhasil.")
         st.rerun()
 
-menu_label = pilihan.split(" ", 1)[1]
-st.title("Aplikasi Kasir")
-menu[menu_label]()
+# Tampilkan halaman terpilih
+st.title(f"Kasir App - {st.session_state.login['username']}")
+menu[selected]()
