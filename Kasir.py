@@ -138,7 +138,6 @@ def halaman_barang():
 
 
 # Transaksi
-
 def halaman_transaksi():
     st.subheader("🛒 Transaksi")
     barang = load_data(BARANG_FILE)
@@ -197,30 +196,43 @@ def halaman_transaksi():
         st.markdown("---")
         st.markdown(f"### 💰 Total: Rp {total:,.0f}")
 
-        if st.button("💾 Simpan Transaksi"):
-            for item in st.session_state.keranjang:
-                for b in barang:
-                    if b["nama"] == item["nama"] and b["kategori"] == item["kategori"]:
-                        b["stok"] -= item["qty"]
-            transaksi.append({
-                "waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "kasir": st.session_state.login["username"],
-                "items": st.session_state.keranjang,
-                "total": total
-            })
-            save_data(BARANG_FILE, barang)
-            save_data(TRANSAKSI_FILE, transaksi)
-            st.session_state.keranjang = []
-            st.success("Transaksi berhasil disimpan.")
-            st.experimental_rerun()
+        uang_dibayar = st.number_input("💵 Uang Diterima", min_value=0)
+        if uang_dibayar >= total:
+            kembalian = uang_dibayar - total
+            st.success(f"Kembalian: Rp {kembalian:,.0f}")
+
+            if st.button("💾 Simpan Transaksi"):
+                for item in st.session_state.keranjang:
+                    for b in barang:
+                        if b["nama"] == item["nama"] and b["kategori"] == item["kategori"]:
+                            b["stok"] -= item["qty"]
+                transaksi_baru = {
+                    "waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "kasir": st.session_state.login["username"],
+                    "items": st.session_state.keranjang,
+                    "total": total,
+                    "bayar": uang_dibayar,
+                    "kembalian": kembalian
+                }
+                transaksi.append(transaksi_baru)
+                save_data(BARANG_FILE, barang)
+                save_data(TRANSAKSI_FILE, transaksi)
+                st.session_state.keranjang = []
+                st.success("Transaksi berhasil disimpan.")
+                st.experimental_rerun()
+        else:
+            st.warning("Uang diterima kurang dari total belanja.")
+
 # Riwayat
 def halaman_riwayat():
     st.subheader("📜 Riwayat Transaksi")
     transaksi = load_data(TRANSAKSI_FILE)
-    if transaksi:
-        df_trans = pd.DataFrame(transaksi)
-        st.dataframe(df_trans)
-
+    if not transaksi:
+        st.info("Belum ada transaksi.")
+        return
+    df = pd.DataFrame(transaksi)
+    st.dataframe(df)
+    
     st.subheader("🗑️ Riwayat Penghapusan Barang")
     hapus = load_data(BARANG_HAPUS_FILE)
     if hapus:
