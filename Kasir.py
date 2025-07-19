@@ -9,6 +9,7 @@ from fpdf import FPDF
 import qrcode
 from PIL import Image
 import io
+import plotly.express as px
 
 # Konfigurasi
 st.set_page_config(page_title="Aplikasi Kasir", layout="wide")
