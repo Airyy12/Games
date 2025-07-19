@@ -138,6 +138,7 @@ def halaman_barang():
 
 
 # Transaksi
+
 def halaman_transaksi():
     st.subheader("🛒 Transaksi")
     barang = load_data(BARANG_FILE)
@@ -196,11 +197,19 @@ def halaman_transaksi():
         st.markdown("---")
         st.markdown(f"### 💰 Total: Rp {total:,.0f}")
 
-        uang_dibayar = st.number_input("💵 Uang Diterima", min_value=0)
-        if uang_dibayar >= total:
-            kembalian = uang_dibayar - total
-            st.success(f"Kembalian: Rp {kembalian:,.0f}")
+        metode = st.radio("Pilih Metode Pembayaran", ["Cash", "QRIS/Transfer"])
 
+        uang_dibayar = 0
+        kembalian = 0
+        if metode == "Cash":
+            uang_dibayar = st.number_input("💵 Uang Diterima", min_value=0)
+            if uang_dibayar >= total:
+                kembalian = uang_dibayar - total
+                st.success(f"Kembalian: Rp {kembalian:,.0f}")
+            else:
+                st.warning("Uang diterima kurang dari total belanja.")
+
+        if metode == "QRIS/Transfer" or uang_dibayar >= total:
             if st.button("💾 Simpan Transaksi"):
                 for item in st.session_state.keranjang:
                     for b in barang:
@@ -211,8 +220,9 @@ def halaman_transaksi():
                     "kasir": st.session_state.login["username"],
                     "items": st.session_state.keranjang,
                     "total": total,
-                    "bayar": uang_dibayar,
-                    "kembalian": kembalian
+                    "bayar": uang_dibayar if metode == "Cash" else total,
+                    "kembalian": kembalian,
+                    "metode": metode
                 }
                 transaksi.append(transaksi_baru)
                 save_data(BARANG_FILE, barang)
@@ -220,9 +230,6 @@ def halaman_transaksi():
                 st.session_state.keranjang = []
                 st.success("Transaksi berhasil disimpan.")
                 st.experimental_rerun()
-        else:
-            st.warning("Uang diterima kurang dari total belanja.")
-
 # Riwayat
 def halaman_riwayat():
     st.subheader("📜 Riwayat Transaksi")
