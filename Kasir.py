@@ -477,7 +477,7 @@ def halaman_statistik():
             st.warning("Tidak ada data bulanan.")
     except Exception as e:
         st.error(f"Gagal membuat ringkasan bulanan: {str(e)}")
-        
+
 # ========== MAIN ==========
 setup_admin()
 
@@ -494,8 +494,9 @@ menu = {
     "Statistik": halaman_statistik
 }
 
+# Hanya tambahkan menu admin jika role sesuai
 if st.session_state["login"]["role"] == "admin":
-    menu["Manajemen Akun"] = halaman_akun
+    menu["Manajemen Akun"] = halaman_akun  # Pastikan key-nya sama dengan di menu_icon
 
 with st.sidebar:
     st.markdown("""
