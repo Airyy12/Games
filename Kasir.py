@@ -97,7 +97,7 @@ if not st.session_state.login:
             if a["username"] == username and check_password(password, a["password"]):
                 st.session_state.login = {"username": username, "role": a["role"]}
                 st.success("Login berhasil!")
-                st.experimental_rerun()
+                st.rerun()
         st.error("Username atau password salah.")
     st.stop()
 
