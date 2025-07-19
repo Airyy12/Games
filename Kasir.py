@@ -4,28 +4,39 @@ import json
 import os
 import bcrypt
 from datetime import datetime
-from fpdf import FPDF
-import qrcode
-from PIL import Image
 import plotly.express as px
 import io
 
-# ---------- Konstanta ---------- #
+st.set_page_config(page_title="Aplikasi Kasir", layout="wide")
+
 AKUN_FILE = "akun.json"
 BARANG_FILE = "barang.json"
 TRANSAKSI_FILE = "transaksi.json"
 KATEGORI_FILE = "kategori.json"
 
-# ---------- Fungsi Utility ---------- #
-def load_data(file):
-    if os.path.exists(file):
-        with open(file, 'r') as f:
-            return json.load(f)
-    return []
+# --- Buat admin default jika belum ada ---
+def buat_admin_default():
+    if not os.path.exists(AKUN_FILE):
+        admin_default = [{
+            "username": "admin",
+            "password": bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode(),
+            "role": "admin"
+        }]
+        with open(AKUN_FILE, "w") as f:
+            json.dump(admin_default, f, indent=4)
+    else:
+        with open(AKUN_FILE, "r") as f:
+            data = json.load(f)
+        if not any(user['role'] == 'admin' for user in data):
+            data.append({
+                "username": "admin",
+                "password": bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode(),
+                "role": "admin"
+            })
+            with open(AKUN_FILE, "w") as f:
+                json.dump(data, f, indent=4)
 
-def save_data(file, data):
-    with open(file, 'w') as f:
-        json.dump(data, f, indent=4)
+buat_admin_default()
 
 # ---------- Login ---------- #
 def login():
