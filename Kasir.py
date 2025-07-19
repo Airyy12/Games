@@ -140,8 +140,8 @@ def halaman_transaksi():
     st.subheader("🛒 Transaksi")
     barang = load_data(BARANG_FILE)
     transaksi = load_data(TRANSAKSI_FILE)
-    kategori_terpilih = st.selectbox("Pilih Kategori", sorted(set(b['kategori'] for b in barang)))
 
+    kategori_terpilih = st.selectbox("Pilih Kategori", sorted(set(b['kategori'] for b in barang)))
     nama_barang_list = [b['nama'] for b in barang if b['kategori'] == kategori_terpilih]
     nama_barang = st.selectbox("Pilih Barang", nama_barang_list)
 
@@ -150,37 +150,62 @@ def halaman_transaksi():
         st.warning("Barang tidak ditemukan.")
         return
 
-    qty = st.number_input(f"Jumlah ({b_dipilih['stok']} tersedia)", 0, b_dipilih['stok'])
+    qty = st.number_input(f"Jumlah ({b_dipilih['stok']} tersedia)", 1, b_dipilih['stok'])
 
     if "keranjang" not in st.session_state:
         st.session_state.keranjang = []
 
-    if st.button("➕ Tambah ke Keranjang") and qty > 0:
-        st.session_state.keranjang.append({
-            "nama": b_dipilih['nama'],
-            "kategori": b_dipilih['kategori'],
-            "qty": qty,
-            "harga": b_dipilih['harga'],
-            "harga_modal": b_dipilih.get("harga_modal", 0),
-            "subtotal": b_dipilih['harga'] * qty
-        })
+    if st.button("➕ Tambah ke Keranjang"):
+        # Cek apakah barang sudah ada di keranjang
+        existing = next((item for item in st.session_state.keranjang
+                         if item['nama'] == b_dipilih['nama'] and item['kategori'] == b_dipilih['kategori']), None)
+        if existing:
+            existing['qty'] += qty
+            existing['subtotal'] = existing['qty'] * existing['harga']
+        else:
+            st.session_state.keranjang.append({
+                "nama": b_dipilih['nama'],
+                "kategori": b_dipilih['kategori'],
+                "qty": qty,
+                "harga": b_dipilih['harga'],
+                "harga_modal": b_dipilih.get("harga_modal", 0),
+                "subtotal": b_dipilih['harga'] * qty
+            })
 
     if st.session_state.keranjang:
         st.write("### 🧺 Keranjang Belanja")
-        df = pd.DataFrame(st.session_state.keranjang)
-        st.dataframe(df)
-        total = sum(item['subtotal'] for item in st.session_state.keranjang)
-        st.write(f"**Total: Rp {total:,.0f}**")
 
-        hapus_idx = st.number_input("Hapus item di keranjang (berdasarkan indeks)", 0, len(st.session_state.keranjang)-1, step=1)
-        if st.button("❌ Hapus Item"):
-            st.session_state.keranjang.pop(hapus_idx)
+        total = 0
+        for idx, item in enumerate(st.session_state.keranjang):
+            with st.container():
+                cols = st.columns([3, 2, 2, 2, 1])
+                cols[0].markdown(f"**{item['nama']}**\n\nKategori: {item['kategori']}")
+                cols[1].write(f"Qty: {item['qty']}")
+                cols[2].write(f"Harga: Rp {item['harga']:,.0f}")
+                cols[3].write(f"Subtotal: Rp {item['subtotal']:,.0f}")
+
+                hapus_qty = cols[4].number_input(
+                    "🗑️", min_value=1, max_value=item['qty'], value=1, key=f"hapus_qty_{idx}"
+                )
+                if cols[4].button("❌", key=f"hapus_btn_{idx}"):
+                    if hapus_qty >= item['qty']:
+                        st.session_state.keranjang.pop(idx)
+                    else:
+                        item['qty'] -= hapus_qty
+                        item['subtotal'] = item['qty'] * item['harga']
+                    st.experimental_rerun()
+
+            total += item['subtotal']
+
+        st.markdown("---")
+        st.markdown(f"### 💰 Total: Rp {total:,.0f}")
 
         if st.button("💾 Simpan Transaksi"):
             for item in st.session_state.keranjang:
                 for b in barang:
                     if b["nama"] == item["nama"] and b["kategori"] == item["kategori"]:
                         b["stok"] -= item["qty"]
+
             transaksi.append({
                 "waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "kasir": st.session_state.login["username"],
@@ -191,6 +216,7 @@ def halaman_transaksi():
             save_data(TRANSAKSI_FILE, transaksi)
             st.session_state.keranjang = []
             st.success("Transaksi berhasil disimpan.")
+            st.experimental_rerun()
 # Riwayat
 def halaman_riwayat():
     st.subheader("📜 Riwayat Transaksi")
