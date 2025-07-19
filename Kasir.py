@@ -293,6 +293,10 @@ def halaman_riwayat():
 # Laporan
 
 def halaman_laporan():
+    import plotly.express as px
+    from io import BytesIO
+    from fpdf import FPDF
+
     st.subheader("📈 Laporan Keuangan")
     data = load_data(TRANSAKSI_FILE)
     if not data:
@@ -304,13 +308,41 @@ def halaman_laporan():
     df['tanggal'] = df['waktu'].dt.date
     df['bulan'] = df['waktu'].dt.to_period('M')
 
+    # 🔍 Filter tanggal laporan
+    tanggal_min = df['tanggal'].min()
+    tanggal_max = df['tanggal'].max()
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input("Tanggal Mulai", tanggal_min, key="laporan_mulai")
+    with col2:
+        end_date = st.date_input("Tanggal Akhir", tanggal_max, key="laporan_akhir")
+
+    if start_date > end_date:
+        st.warning("Tanggal mulai tidak boleh setelah tanggal akhir.")
+        return
+
+    # Filter kasir
+    kasir_list = df['kasir'].unique().tolist()
+    selected_kasir = st.selectbox("Filter Kasir", ["Semua"] + kasir_list)
+    df = df[(df['tanggal'] >= start_date) & (df['tanggal'] <= end_date)]
+    if selected_kasir != "Semua":
+        df = df[df['kasir'] == selected_kasir]
+
     st.write("### 📅 Pendapatan Harian")
     harian = df.groupby("tanggal")["total"].sum()
-    st.line_chart(harian)
+    fig_harian = px.line(harian, title="Pendapatan Harian")
+    st.plotly_chart(fig_harian)
 
     st.write("### 📆 Pendapatan Bulanan")
     bulanan = df.groupby("bulan")["total"].sum()
-    st.bar_chart(bulanan)
+    fig_bulanan = px.bar(bulanan, title="Pendapatan Bulanan")
+    st.plotly_chart(fig_bulanan)
+
+    st.write("### 📊 Rata-rata Harian & Total")
+    total_pendapatan = df['total'].sum()
+    rata_harian = harian.mean() if not harian.empty else 0
+    st.metric("Total Pendapatan", f"Rp {total_pendapatan:,.0f}")
+    st.metric("Rata-rata/Hari", f"Rp {rata_harian:,.0f}")
 
     # Ekspor ke Excel
     if st.button("📤 Ekspor Excel"):
@@ -319,8 +351,26 @@ def halaman_laporan():
         with open("laporan_penjualan.xlsx", "rb") as f:
             st.download_button("Download Excel", f, "laporan_penjualan.xlsx")
 
+    # Ekspor PDF
+    if st.button("📄 Ekspor PDF"):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, txt="Laporan Keuangan", ln=True, align='C')
+
+        for index, row in df.iterrows():
+            pdf.cell(200, 10, txt=f"{row['waktu']} - {row['kasir']} - Rp{row['total']:,.0f}", ln=True)
+
+        pdf_output = BytesIO()
+        pdf.output(pdf_output)
+        st.download_button("Download PDF", pdf_output.getvalue(), "laporan_penjualan.pdf")
+
 # Statistik
+
 def halaman_statistik():
+    import plotly.express as px
+    from collections import Counter
+
     st.subheader("📊 Statistik Penjualan")
     data = load_data(TRANSAKSI_FILE)
     if not data:
@@ -336,19 +386,17 @@ def halaman_statistik():
     tanggal_max = df['tanggal'].max()
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Tanggal Mulai", tanggal_min)
+        start_date = st.date_input("Tanggal Mulai", tanggal_min, key="statistik_mulai")
     with col2:
-        end_date = st.date_input("Tanggal Akhir", tanggal_max)
+        end_date = st.date_input("Tanggal Akhir", tanggal_max, key="statistik_akhir")
 
     if start_date > end_date:
         st.warning("Tanggal mulai tidak boleh setelah tanggal akhir.")
         return
 
     df = df[(df['tanggal'] >= start_date) & (df['tanggal'] <= end_date)]
-    data = df.to_dict(orient="records")  # Update `data` agar selaras
+    data = df.to_dict(orient="records")
 
-    # Barang Terlaris
-    from collections import Counter
     all_items = []
     for t in data:
         for item in t['items']:
@@ -359,20 +407,20 @@ def halaman_statistik():
         counter = Counter(all_items)
         terlaris_df = pd.DataFrame(counter.items(), columns=["Barang", "Jumlah Terjual"]).sort_values(by="Jumlah Terjual", ascending=False)
         st.dataframe(terlaris_df)
-        st.bar_chart(terlaris_df.set_index("Barang"))
+        fig_terlaris = px.bar(terlaris_df, x="Barang", y="Jumlah Terjual", title="Barang Terlaris")
+        st.plotly_chart(fig_terlaris)
     else:
         st.info("Tidak ada barang terjual di rentang tanggal ini.")
 
-    # Pendapatan Harian
     st.write("### 💰 Pendapatan Harian")
     if not df.empty:
         pendapatan_harian = df.groupby("tanggal")["total"].sum().reset_index().sort_values(by="tanggal")
         st.dataframe(pendapatan_harian.rename(columns={"total": "Pendapatan"}))
-        st.line_chart(pendapatan_harian.set_index("tanggal")["total"])
+        fig_pendapatan = px.line(pendapatan_harian, x="tanggal", y="Pendapatan", title="Pendapatan Harian")
+        st.plotly_chart(fig_pendapatan)
     else:
         st.info("Tidak ada transaksi untuk ditampilkan pada grafik pendapatan.")
 
-    # Laba Kotor Harian
     st.write("### 📈 Laba Kotor Harian")
     laba_dict = {}
     for t in data:
@@ -388,25 +436,24 @@ def halaman_statistik():
         laba_df = pd.DataFrame(list(laba_dict.items()), columns=["Tanggal", "Laba Kotor"])
         laba_df = laba_df.sort_values(by="Tanggal")
         st.dataframe(laba_df)
-        st.line_chart(laba_df.set_index("Tanggal")["Laba Kotor"])
+        fig_laba = px.line(laba_df, x="Tanggal", y="Laba Kotor", title="Laba Kotor Harian")
+        st.plotly_chart(fig_laba)
     else:
         st.info("Tidak ada data laba kotor untuk ditampilkan.")
 
-    # Rata-rata Transaksi per Hari
     st.write("### 🧾 Rata-rata Transaksi per Hari")
     rata_df = df.groupby("tanggal").size().reset_index(name="Jumlah Transaksi")
     rata_rata = rata_df["Jumlah Transaksi"].mean() if not rata_df.empty else 0
     st.metric("Rata-rata Transaksi/Hari", f"{rata_rata:.2f}")
 
-    # Performa Kasir
     st.write("### 🧍 Performa Kasir")
     if not df.empty:
         kasir_df = df.groupby("kasir")["total"].agg(["count", "sum"]).reset_index().rename(columns={"count": "Jumlah Transaksi", "sum": "Total Penjualan"})
         st.dataframe(kasir_df)
-        st.bar_chart(kasir_df.set_index("kasir")[["Total Penjualan"]])
+        fig_kasir = px.bar(kasir_df, x="kasir", y="Total Penjualan", title="Performa Kasir")
+        st.plotly_chart(fig_kasir)
     else:
         st.info("Tidak ada data kasir di rentang tanggal ini.")
-
 
 # Akun
 
