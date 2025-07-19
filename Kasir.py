@@ -320,7 +320,6 @@ def halaman_laporan():
             st.download_button("Download Excel", f, "laporan_penjualan.xlsx")
 
 # Statistik
-
 def halaman_statistik():
     st.subheader("📊 Statistik Penjualan")
     data = load_data(TRANSAKSI_FILE)
@@ -332,6 +331,22 @@ def halaman_statistik():
     df['waktu'] = pd.to_datetime(df['waktu'])
     df['tanggal'] = df['waktu'].dt.date
 
+    # 🔍 Filter rentang tanggal
+    tanggal_min = df['tanggal'].min()
+    tanggal_max = df['tanggal'].max()
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input("Tanggal Mulai", tanggal_min)
+    with col2:
+        end_date = st.date_input("Tanggal Akhir", tanggal_max)
+
+    if start_date > end_date:
+        st.warning("Tanggal mulai tidak boleh setelah tanggal akhir.")
+        return
+
+    df = df[(df['tanggal'] >= start_date) & (df['tanggal'] <= end_date)]
+    data = df.to_dict(orient="records")  # Update `data` agar selaras
+
     # Barang Terlaris
     from collections import Counter
     all_items = []
@@ -339,19 +354,25 @@ def halaman_statistik():
         for item in t['items']:
             all_items.append(item['nama'])
 
-    counter = Counter(all_items)
-    terlaris_df = pd.DataFrame(counter.items(), columns=["Barang", "Jumlah Terjual"]).sort_values(by="Jumlah Terjual", ascending=False)
     st.write("### 📦 Barang Terlaris")
-    st.dataframe(terlaris_df)
-    st.bar_chart(terlaris_df.set_index("Barang"))
+    if all_items:
+        counter = Counter(all_items)
+        terlaris_df = pd.DataFrame(counter.items(), columns=["Barang", "Jumlah Terjual"]).sort_values(by="Jumlah Terjual", ascending=False)
+        st.dataframe(terlaris_df)
+        st.bar_chart(terlaris_df.set_index("Barang"))
+    else:
+        st.info("Tidak ada barang terjual di rentang tanggal ini.")
 
     # Pendapatan Harian
     st.write("### 💰 Pendapatan Harian")
-    pendapatan_harian = df.groupby("tanggal")["total"].sum().reset_index().sort_values(by="total", ascending=False)
-    st.dataframe(pendapatan_harian.rename(columns={"total": "Pendapatan"}))
-    st.line_chart(pendapatan_harian.set_index("tanggal"))
+    if not df.empty:
+        pendapatan_harian = df.groupby("tanggal")["total"].sum().reset_index().sort_values(by="tanggal")
+        st.dataframe(pendapatan_harian.rename(columns={"total": "Pendapatan"}))
+        st.line_chart(pendapatan_harian.set_index("tanggal")["total"])
+    else:
+        st.info("Tidak ada transaksi untuk ditampilkan pada grafik pendapatan.")
 
-    # Laba Kotor
+    # Laba Kotor Harian
     st.write("### 📈 Laba Kotor Harian")
     laba_dict = {}
     for t in data:
@@ -359,25 +380,33 @@ def halaman_statistik():
         laba_hari = 0
         for item in t["items"]:
             harga_modal = item.get("harga_modal")
-            if harga_modal:
+            if harga_modal is not None:
                 laba_hari += (item["harga"] - harga_modal) * item["qty"]
         laba_dict[tgl] = laba_dict.get(tgl, 0) + laba_hari
 
-    laba_df = pd.DataFrame(list(laba_dict.items()), columns=["Tanggal", "Laba Kotor"])
-    st.dataframe(laba_df.sort_values(by="Tanggal"))
-    st.line_chart(laba_df.set_index("Tanggal"))
+    if laba_dict:
+        laba_df = pd.DataFrame(list(laba_dict.items()), columns=["Tanggal", "Laba Kotor"])
+        laba_df = laba_df.sort_values(by="Tanggal")
+        st.dataframe(laba_df)
+        st.line_chart(laba_df.set_index("Tanggal")["Laba Kotor"])
+    else:
+        st.info("Tidak ada data laba kotor untuk ditampilkan.")
 
     # Rata-rata Transaksi per Hari
     st.write("### 🧾 Rata-rata Transaksi per Hari")
     rata_df = df.groupby("tanggal").size().reset_index(name="Jumlah Transaksi")
-    rata_rata = rata_df["Jumlah Transaksi"].mean()
+    rata_rata = rata_df["Jumlah Transaksi"].mean() if not rata_df.empty else 0
     st.metric("Rata-rata Transaksi/Hari", f"{rata_rata:.2f}")
 
     # Performa Kasir
     st.write("### 🧍 Performa Kasir")
-    kasir_df = df.groupby("kasir")["total"].agg(["count", "sum"]).reset_index().rename(columns={"count": "Jumlah Transaksi", "sum": "Total Penjualan"})
-    st.dataframe(kasir_df)
-    st.bar_chart(kasir_df.set_index("kasir")[["Total Penjualan"]])
+    if not df.empty:
+        kasir_df = df.groupby("kasir")["total"].agg(["count", "sum"]).reset_index().rename(columns={"count": "Jumlah Transaksi", "sum": "Total Penjualan"})
+        st.dataframe(kasir_df)
+        st.bar_chart(kasir_df.set_index("kasir")[["Total Penjualan"]])
+    else:
+        st.info("Tidak ada data kasir di rentang tanggal ini.")
+
 
 # Akun
 
