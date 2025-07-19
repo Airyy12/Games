@@ -231,16 +231,22 @@ def halaman_transaksi():
                 # Tandai bahwa transaksi selesai, dan biarkan rerun otomatis berdasarkan stat
                 st.session_state.transaksi_selesai = True
 
-# Riwayat
 def halaman_riwayat():
     st.subheader("📜 Riwayat Transaksi")
     transaksi = load_data(TRANSAKSI_FILE)
     if not transaksi:
         st.info("Belum ada transaksi.")
         return
+
+    # Ubah list items menjadi string yang bisa dibaca
+    for t in transaksi:
+        t["items"] = ", ".join(
+            f"{item['nama']}({item['qty']}x)" for item in t["items"]
+        )
+
     df = pd.DataFrame(transaksi)
     st.dataframe(df)
-    
+
     st.subheader("🗑️ Riwayat Penghapusan Barang")
     hapus = load_data(BARANG_HAPUS_FILE)
     if hapus:
