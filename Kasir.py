@@ -237,34 +237,41 @@ def halaman_riwayat():
 
     if not transaksi:
         st.info("Belum ada transaksi.")
-        return
+    else:
+        # Format kolom 'items'
+        for t in transaksi:
+            t["items"] = ", ".join(f"{item['nama']}({item['qty']}x)" for item in t["items"])
 
-    # Konversi ke DataFrame
-    for t in transaksi:
-        t["items"] = ", ".join(
-            f"{item['nama']}({item['qty']}x)" for item in t["items"]
-        )
-    df = pd.DataFrame(transaksi)
+        df = pd.DataFrame(transaksi)
+        df["waktu"] = pd.to_datetime(df["waktu"])
 
-    # Konversi kolom 'waktu' ke datetime
-    df["waktu"] = pd.to_datetime(df["waktu"])
+        # 🎯 Filter tanggal transaksi
+        st.markdown("### 🔎 Filter Transaksi")
+        tanggal_mulai = st.date_input("📅 Tanggal Mulai", df["waktu"].min().date(), key="transaksi_mulai")
+        tanggal_akhir = st.date_input("📅 Tanggal Akhir", df["waktu"].max().date(), key="transaksi_akhir")
+        mask = (df["waktu"].dt.date >= tanggal_mulai) & (df["waktu"].dt.date <= tanggal_akhir)
+        df_filtered = df[mask]
 
-    # 🎯 Filter tanggal
-    tanggal_mulai = st.date_input("📅 Tanggal Mulai", df["waktu"].min().date())
-    tanggal_akhir = st.date_input("📅 Tanggal Akhir", df["waktu"].max().date())
+        st.dataframe(df_filtered)
 
-    # Terapkan filter
-    mask = (df["waktu"].dt.date >= tanggal_mulai) & (df["waktu"].dt.date <= tanggal_akhir)
-    df_filtered = df[mask]
+    # =======================
 
-    st.dataframe(df_filtered)
-
-    # Riwayat Penghapusan
     st.subheader("🗑️ Riwayat Penghapusan Barang")
     hapus = load_data(BARANG_HAPUS_FILE)
-    if hapus:
+    if not hapus:
+        st.info("Belum ada riwayat penghapusan.")
+    else:
         df_hapus = pd.DataFrame(hapus)
-        st.dataframe(df_hapus)
+        df_hapus["tanggal_dihapus"] = pd.to_datetime(df_hapus["tanggal_dihapus"])
+
+        # 🎯 Filter tanggal penghapusan
+        st.markdown("### 🔎 Filter Penghapusan Barang")
+        hapus_mulai = st.date_input("📅 Tanggal Mulai", df_hapus["tanggal_dihapus"].min().date(), key="hapus_mulai")
+        hapus_akhir = st.date_input("📅 Tanggal Akhir", df_hapus["tanggal_dihapus"].max().date(), key="hapus_akhir")
+        hapus_mask = (df_hapus["tanggal_dihapus"].dt.date >= hapus_mulai) & (df_hapus["tanggal_dihapus"].dt.date <= hapus_akhir)
+        df_hapus_filtered = df_hapus[hapus_mask]
+
+        st.dataframe(df_hapus_filtered)
 
 # Laporan
 
