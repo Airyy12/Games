@@ -403,6 +403,7 @@ def generate_receipt(items, subtotal, diskon, pajak, total, pembayaran, kembalia
     )
 
 # 📊 Modul Laporan
+# Perbaikan pada bagian report_module()
 def report_module():
     st.header("📊 Laporan Penjualan")
     
@@ -427,8 +428,8 @@ def report_module():
         st.warning("Tidak ada transaksi pada periode ini")
         return
     
-    # Konversi items dari JSON ke dataframe
-    df_items = pd.json_normalize(df['items'].apply(json.loads).explode('items')
+    # PERBAIKAN DI SINI (tambahkan tanda kurung penutup)
+    df_items = pd.json_normalize(df['items'].apply(json.loads).explode('items'))
     df_items = pd.json_normalize(df_items['items'])
     
     # Tampilkan ringkasan
@@ -437,7 +438,7 @@ def report_module():
     col1.metric("Total Transaksi", len(df))
     col2.metric("Total Pendapatan", f"Rp {df['total'].sum():,.0f}")
     col3.metric("Rata-rata per Transaksi", f"Rp {df['total'].mean():,.0f}")
-    
+
     # Grafik
     st.subheader("📊 Visualisasi Data")
     tab1, tab2 = st.tabs(["Trend Harian", "Produk Terlaris"])
