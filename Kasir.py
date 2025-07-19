@@ -1,219 +1,221 @@
+# aplikasi_kasir.py
+
 import streamlit as st
 import pandas as pd
 import json
 import os
 import bcrypt
 from datetime import datetime
-import plotly.express as px
-import io
+from fpdf import FPDF
+import qrcode
+from PIL import Image
 
 st.set_page_config(page_title="Aplikasi Kasir", layout="wide")
 
 AKUN_FILE = "akun.json"
 BARANG_FILE = "barang.json"
 TRANSAKSI_FILE = "transaksi.json"
-KATEGORI_FILE = "kategori.json"
 
-# ---------- Fungsi Load & Save ---------- #
-def load_data(file):
-    if os.path.exists(file):
-        with open(file, "r") as f:
-            return json.load(f)
-    return []
+# ---------------- FUNGSI UTILITAS ---------------- #
+
+def load_data(file, default=[]):
+    if not os.path.exists(file):
+        with open(file, "w") as f:
+            json.dump(default, f)
+    with open(file, "r") as f:
+        return json.load(f)
 
 def save_data(file, data):
     with open(file, "w") as f:
-        json.dump(data, f, indent=4)
+        json.dump(data, f, indent=2)
 
-# ---------- Buat Admin Default ---------- #
-def buat_admin_default():
-    if not os.path.exists(AKUN_FILE):
-        admin_default = [{
-            "username": "admin",
-            "password": bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode(),
-            "role": "admin"
-        }]
-        save_data(AKUN_FILE, admin_default)
-    else:
-        akun = load_data(AKUN_FILE)
-        if not any(user['role'] == 'admin' for user in akun):
-            akun.append({
-                "username": "admin",
-                "password": bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode(),
-                "role": "admin"
-            })
-            save_data(AKUN_FILE, akun)
+def hash_password(password):
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
-buat_admin_default()
+def check_password(password, hashed):
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
-# ---------- Login ---------- #
-def login():
+def login(username, password):
     akun = load_data(AKUN_FILE)
+    for user in akun:
+        if user['username'] == username and check_password(password, user['password']):
+            return user
+    return None
+
+# ---------------- HALAMAN LOGIN ---------------- #
+
+if "login_user" not in st.session_state:
+    st.session_state.login_user = None
+
+if st.session_state.login_user is None:
     st.title("🔐 Login Kasir")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
-
     if st.button("Login"):
-        for user in akun:
-            if user["username"] == username and bcrypt.checkpw(password.encode(), user["password"].encode()):
-                st.session_state.login = True
-                st.session_state.username = user["username"]
-                st.session_state.role = user.get("role", "kasir")
-                st.experimental_rerun()
-        st.error("Username atau password salah.")
+        user = login(username, password)
+        if user:
+            st.session_state.login_user = user
+            st.rerun()
+        else:
+            st.error("Username atau password salah.")
+    st.stop()
 
-# ---------- Tambah User oleh Admin ---------- #
-def halaman_manajemen_user():
-    st.subheader("👤 Tambah User Baru (Admin Only)")
+# ---------------- MENU UTAMA ---------------- #
+
+menu = st.sidebar.selectbox("Menu", ["Dashboard", "Barang", "Transaksi", "Histori Transaksi", "Laporan Keuangan"] + (["Registrasi User"] if st.session_state.login_user['role'] == "admin" else []) + ["Logout"])
+
+st.sidebar.markdown(f"**Login sebagai:** `{st.session_state.login_user['username']}` ({st.session_state.login_user['role']})")
+
+# ---------------- LOGOUT ---------------- #
+
+if menu == "Logout":
+    st.session_state.login_user = None
+    st.rerun()
+
+# ---------------- DASHBOARD ---------------- #
+
+elif menu == "Dashboard":
+    st.title("📊 Dashboard Ringkasan")
+    transaksi = load_data(TRANSAKSI_FILE)
+    total = sum(t['total'] for t in transaksi)
+    st.metric("Total Penjualan", f"Rp {total:,.0f}")
+    st.metric("Total Transaksi", len(transaksi))
+
+# ---------------- BARANG ---------------- #
+
+elif menu == "Barang":
+    st.title("📦 Manajemen Barang")
+    data = load_data(BARANG_FILE)
+
+    with st.form("form_barang"):
+        nama = st.text_input("Nama Barang")
+        kategori = st.text_input("Kategori")
+        harga = st.number_input("Harga", 0)
+        stok = st.number_input("Stok", 0)
+        submitted = st.form_submit_button("Tambah / Update Barang")
+        if submitted:
+            if not nama or not kategori:
+                st.warning("Nama dan kategori wajib diisi.")
+            else:
+                found = False
+                for item in data:
+                    if item['nama'].lower() == nama.lower() and item['kategori'].lower() == kategori.lower():
+                        item['harga'] = harga
+                        item['stok'] += stok
+                        found = True
+                        break
+                if not found:
+                    data.append({"nama": nama, "kategori": kategori, "harga": harga, "stok": stok})
+                save_data(BARANG_FILE, data)
+                st.success("Barang ditambahkan atau diperbarui.")
+                st.rerun()
+
+    st.subheader("Daftar Barang")
+    df = pd.DataFrame(data)
+    st.dataframe(df)
+
+# ---------------- TRANSAKSI ---------------- #
+
+elif menu == "Transaksi":
+    st.title("🛒 Transaksi")
+    data_barang = load_data(BARANG_FILE)
+    transaksi = []
+    total = 0
+
+    for i in range(5):
+        col1, col2 = st.columns([3, 1])
+        nama = col1.selectbox(f"Barang #{i+1}", [""] + [b['nama'] for b in data_barang], key=f"barang_{i}")
+        qty = col2.number_input("Jumlah", 0, key=f"qty_{i}")
+        if nama:
+            item = next((b for b in data_barang if b['nama'] == nama), None)
+            if item:
+                subtotal = qty * item['harga']
+                total += subtotal
+                transaksi.append({
+                    "nama": item['nama'],
+                    "qty": qty,
+                    "harga": item['harga'],
+                    "subtotal": subtotal
+                })
+
+    st.write("Total: **Rp {:,.0f}**".format(total))
+    if st.button("Simpan Transaksi"):
+        if not transaksi:
+            st.warning("Tidak ada item dipilih.")
+        else:
+            for t in transaksi:
+                for b in data_barang:
+                    if b['nama'] == t['nama']:
+                        if b['stok'] < t['qty']:
+                            st.error(f"Stok tidak cukup untuk {b['nama']}")
+                            st.stop()
+                        b['stok'] -= t['qty']
+            save_data(BARANG_FILE, data_barang)
+            transaksi_data = load_data(TRANSAKSI_FILE)
+            transaksi_data.append({
+                "waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "user": st.session_state.login_user['username'],
+                "item": transaksi,
+                "total": total
+            })
+            save_data(TRANSAKSI_FILE, transaksi_data)
+            st.success("Transaksi berhasil disimpan.")
+
+# ---------------- HISTORI ---------------- #
+
+elif menu == "Histori Transaksi":
+    st.title("📜 Riwayat Transaksi")
+    data = load_data(TRANSAKSI_FILE)
+    df = pd.DataFrame(data)
+    df["waktu"] = pd.to_datetime(df["waktu"])
+    df["tanggal"] = df["waktu"].dt.date
+
+    col1, col2 = st.columns(2)
+    tanggal = col1.date_input("Filter Tanggal", value=None)
+    pengguna = col2.text_input("Filter User")
+
+    if tanggal:
+        df = df[df["tanggal"] == pd.to_datetime(tanggal)]
+    if pengguna:
+        df = df[df["user"].str.contains(pengguna, case=False)]
+
+    for _, row in df.iterrows():
+        st.write(f"🕒 {row['waktu']} | 👤 {row['user']} | 💰 Rp {row['total']:,.0f}")
+        for item in row['item']:
+            st.write(f"- {item['nama']} x {item['qty']} = Rp {item['subtotal']:,.0f}")
+
+# ---------------- LAPORAN ---------------- #
+
+elif menu == "Laporan Keuangan":
+    st.title("📈 Laporan Keuangan")
+    data = load_data(TRANSAKSI_FILE)
+    df = pd.DataFrame(data)
+    df["waktu"] = pd.to_datetime(df["waktu"])
+    df["tanggal"] = df["waktu"].dt.date
+    laporan = df.groupby("tanggal")["total"].sum().reset_index()
+    st.bar_chart(laporan.set_index("tanggal"))
+
+# ---------------- REGISTRASI ---------------- #
+
+elif menu == "Registrasi User":
+    if st.session_state.login_user['role'] != "admin":
+        st.warning("Hanya admin yang bisa akses fitur ini.")
+        st.stop()
+
+    st.title("🧑‍💼 Registrasi Pengguna Baru")
+    username = st.text_input("Username baru")
+    password = st.text_input("Password", type="password")
+    role = st.selectbox("Role", ["admin", "kasir"])
     akun = load_data(AKUN_FILE)
-    new_username = st.text_input("Username Baru")
-    new_password = st.text_input("Password Baru", type="password")
-    confirm_password = st.text_input("Konfirmasi Password", type="password")
-    role = st.selectbox("Role", ["kasir", "admin"])
 
-    if st.button("Tambah User"):
-        if new_password != confirm_password:
-            st.warning("Password tidak cocok.")
-        elif any(u["username"] == new_username for u in akun):
-            st.warning("Username sudah digunakan.")
+    if st.button("Registrasi"):
+        if any(u['username'] == username for u in akun):
+            st.error("Username sudah digunakan.")
         else:
-            hashed_pw = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
-            akun.append({"username": new_username, "password": hashed_pw, "role": role})
+            akun.append({
+                "username": username,
+                "password": hash_password(password),
+                "role": role
+            })
             save_data(AKUN_FILE, akun)
-            st.success(f"User '{new_username}' berhasil dibuat sebagai {role}.")
-
-# ---------- Manajemen Barang ---------- #
-def halaman_barang():
-    st.header("📦 Manajemen Barang")
-    barang = load_data(BARANG_FILE)
-    kategori = load_data(KATEGORI_FILE)
-
-    if not kategori:
-        st.warning("Kategori masih kosong. Tambahkan kategori terlebih dahulu.")
-        return
-
-    nama = st.text_input("Nama Barang")
-    kategori_input = st.selectbox("Kategori", kategori)
-    harga = st.number_input("Harga", min_value=0)
-    stok = st.number_input("Stok", min_value=0)
-
-    if st.button("Tambah Barang"):
-        if any(b["nama"] == nama and b["kategori"] == kategori_input for b in barang):
-            st.warning("Barang dengan nama dan kategori yang sama sudah ada.")
-        else:
-            barang.append({"nama": nama, "kategori": kategori_input, "harga": harga, "stok": stok})
-            save_data(BARANG_FILE, barang)
-            st.success("Barang berhasil ditambahkan.")
-
-    st.write(pd.DataFrame(barang))
-
-# ---------- Manajemen Kategori ---------- #
-def halaman_kategori():
-    st.header("🏷️ Manajemen Kategori")
-    kategori = load_data(KATEGORI_FILE)
-    new_kategori = st.text_input("Tambah Kategori Baru")
-    if st.button("Tambah Kategori"):
-        if new_kategori in kategori:
-            st.warning("Kategori sudah ada.")
-        else:
-            kategori.append(new_kategori)
-            save_data(KATEGORI_FILE, kategori)
-            st.success("Kategori ditambahkan.")
-    st.write(pd.DataFrame(kategori, columns=["Kategori"]))
-
-# ---------- Transaksi ---------- #
-def halaman_transaksi():
-    st.header("💰 Transaksi Penjualan")
-    barang = load_data(BARANG_FILE)
-    transaksi = load_data(TRANSAKSI_FILE)
-
-    if not barang:
-        st.warning("Data barang kosong.")
-        return
-
-    keranjang = []
-    for b in barang:
-        qty = st.number_input(f"{b['nama']} ({b['stok']} stok) - Rp{b['harga']}", min_value=0, max_value=b['stok'], key=b['nama'])
-        if qty > 0:
-            keranjang.append({"nama": b["nama"], "harga": b["harga"], "qty": qty})
-
-    diskon = st.number_input("Diskon (%)", min_value=0, max_value=100, value=0)
-    if keranjang and st.button("Bayar"):
-        total = sum(item['harga'] * item['qty'] for item in keranjang)
-        total_diskon = total * (diskon / 100)
-        total_bayar = total - total_diskon
-        waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        for item in keranjang:
-            for b in barang:
-                if b['nama'] == item['nama']:
-                    b['stok'] -= item['qty']
-
-        transaksi.append({
-            "waktu": waktu,
-            "kasir": st.session_state.username,
-            "item": keranjang,
-            "total": total,
-            "diskon": diskon,
-            "total_bayar": total_bayar
-        })
-
-        save_data(BARANG_FILE, barang)
-        save_data(TRANSAKSI_FILE, transaksi)
-        st.success(f"Transaksi berhasil. Total bayar: Rp{total_bayar:,}")
-
-# ---------- Laporan Keuangan ---------- #
-def halaman_laporan():
-    st.header("📊 Laporan Keuangan")
-    transaksi = load_data(TRANSAKSI_FILE)
-    if not transaksi:
-        st.warning("Belum ada transaksi.")
-        return
-
-    df = pd.DataFrame(transaksi)
-    df['waktu'] = pd.to_datetime(df['waktu'])
-    df['tanggal'] = df['waktu'].dt.date
-    df['total_bayar'] = df['total_bayar'].astype(float)
-
-    st.line_chart(df.groupby("tanggal")["total_bayar"].sum())
-    st.write("Total Penjualan:", f"Rp{df['total_bayar'].sum():,.0f}")
-
-    if st.button("📤 Export Excel"):
-        excel = io.BytesIO()
-        df.to_excel(excel, index=False, sheet_name="Laporan")
-        st.download_button("Download", excel.getvalue(), file_name="laporan.xlsx")
-
-# ---------- Main App ---------- #
-def main():
-    if "login" not in st.session_state:
-        st.session_state.login = False
-
-    if not st.session_state.login:
-        login()
-        return
-
-    st.sidebar.title(f"👋 Selamat Datang, {st.session_state.username}")
-    menu = st.sidebar.selectbox("Menu", [
-        "Transaksi", "Barang", "Kategori", "Laporan Keuangan"
-    ])
-
-    if menu == "Transaksi":
-        halaman_transaksi()
-    elif menu == "Barang":
-        halaman_barang()
-    elif menu == "Kategori":
-        halaman_kategori()
-    elif menu == "Laporan Keuangan":
-        halaman_laporan()
-
-    if st.session_state.role == "admin":
-        st.sidebar.markdown("---")
-        if st.sidebar.button("🧑‍💼 Tambah User Baru"):
-            halaman_manajemen_user()
-
-    if st.sidebar.button("Logout"):
-        st.session_state.login = False
-        st.experimental_rerun()
-
-if __name__ == "__main__":
-    main()
+            st.success(f"User {username} berhasil didaftarkan.")
