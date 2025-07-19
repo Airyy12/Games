@@ -38,9 +38,14 @@ def load_data(file, default=[]):
         return default
 
 def simpan_data(file, data):
-    """Simpan data ke JSON"""
+    """Simpan data ke JSON, konversi objek tidak serializable seperti datetime ke string"""
+    def convert(obj):
+        if isinstance(obj, datetime):
+            return obj.strftime('%Y-%m-%d %H:%M:%S')
+        return str(obj)  # fallback untuk objek lainnya
+
     with open(file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+        json.dump(data, f, indent=2, ensure_ascii=False, default=convert)
 
 def load_akun():
     return load_data(AKUN_FILE)
