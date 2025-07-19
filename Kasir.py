@@ -112,14 +112,15 @@ def halaman_barang():
     if barang:
         index = st.selectbox("Pilih Barang", range(len(barang)), format_func=lambda i: f"{barang[i]['nama']} ({barang[i]['kategori']})")
         keterangan = st.text_input("Alasan Penghapusan")
-        tanggal = st.date_input("Tanggal Penghapusan", datetime.now())
+        tanggal = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.code(tanggal, language="text")
         if st.button("Hapus Barang"):
             barang_dihapus = load_data(BARANG_HAPUS_FILE)
             data_dihapus = barang.pop(index)
             barang_dihapus.append({
                 **data_dihapus,
                 "keterangan": keterangan,
-                "tanggal_dihapus": tanggal.strftime("%Y-%m-%d")
+                "tanggal_dihapus": tanggal
             })
             save_data(BARANG_FILE, barang)
             save_data(BARANG_HAPUS_FILE, barang_dihapus)
@@ -366,4 +367,3 @@ with st.sidebar:
 menu_label = pilihan.split(" ", 1)[1]
 st.title("Aplikasi Kasir")
 menu[menu_label]()
-
