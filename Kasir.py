@@ -234,24 +234,38 @@ def halaman_transaksi():
 def halaman_riwayat():
     st.subheader("📜 Riwayat Transaksi")
     transaksi = load_data(TRANSAKSI_FILE)
+
     if not transaksi:
         st.info("Belum ada transaksi.")
         return
 
-    # Ubah list items menjadi string yang bisa dibaca
+    # Konversi ke DataFrame
     for t in transaksi:
         t["items"] = ", ".join(
             f"{item['nama']}({item['qty']}x)" for item in t["items"]
         )
-
     df = pd.DataFrame(transaksi)
-    st.dataframe(df)
 
+    # Konversi kolom 'waktu' ke datetime
+    df["waktu"] = pd.to_datetime(df["waktu"])
+
+    # 🎯 Filter tanggal
+    tanggal_mulai = st.date_input("📅 Tanggal Mulai", df["waktu"].min().date())
+    tanggal_akhir = st.date_input("📅 Tanggal Akhir", df["waktu"].max().date())
+
+    # Terapkan filter
+    mask = (df["waktu"].dt.date >= tanggal_mulai) & (df["waktu"].dt.date <= tanggal_akhir)
+    df_filtered = df[mask]
+
+    st.dataframe(df_filtered)
+
+    # Riwayat Penghapusan
     st.subheader("🗑️ Riwayat Penghapusan Barang")
     hapus = load_data(BARANG_HAPUS_FILE)
     if hapus:
         df_hapus = pd.DataFrame(hapus)
         st.dataframe(df_hapus)
+
 # Laporan
 
 def halaman_laporan():
