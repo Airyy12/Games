@@ -273,6 +273,7 @@ setup_admin()
 
 if "login" not in st.session_state:
     login()
+    st.stop()  # Penting agar tidak lanjut ke bawah sebelum login
 
 menu = {
     "Dashboard": halaman_dashboard,
@@ -282,7 +283,8 @@ menu = {
     "Laporan": halaman_laporan,
     "Statistik": halaman_statistik
 }
-if st.session_state.login["role"] == "admin":
+
+if st.session_state["login"]["role"] == "admin":
     menu["Manajemen Akun"] = halaman_akun
 
 with st.sidebar:
